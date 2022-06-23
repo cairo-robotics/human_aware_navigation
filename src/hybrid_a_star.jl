@@ -148,7 +148,7 @@ function get_action_cost(environment, humans_to_avoid, final_x::Float64, final_y
     end
 
     #Cost from obstacles
-    padding_radius = 2.0 + environment.cart.L
+    padding_radius = environment.cart.L
     for obstacle in environment.obstacles
         euclidean_distance::Float64 = ( (final_x - obstacle.x)^2 + (final_y - obstacle.y)^2 )^ 0.5
         if(euclidean_distance >= obstacle.r + padding_radius)
@@ -199,9 +199,9 @@ function get_action_cost(environment, humans_to_avoid, final_x::Float64, final_y
     end
 
     #Cost from no change in steering angle
-    # if(action == 0.0)
-    #    total_cost += -1.0
-    # end
+    if(action == 0.0)
+       total_cost += -1.0
+    end
 
     #Cost from Long Paths
     total_cost += 1
@@ -213,9 +213,9 @@ function hybrid_a_star_search(start_x, start_y, start_theta, goal_x, goal_y, env
 
     #Action Set
     set_of_delta_angles = Array{Float64,1}([0.0])
-    for i in 1:11
-        push!(set_of_delta_angles, float(-15*i*pi/180))
-        push!(set_of_delta_angles, float(15*i*pi/180))
+    for i in 1:17
+        push!(set_of_delta_angles, float(-10*i*pi/180))
+        push!(set_of_delta_angles, float(10*i*pi/180))
     end
     push!(set_of_delta_angles, float(pi))
 
