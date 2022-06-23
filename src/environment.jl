@@ -228,7 +228,8 @@ end
 function display_env(env::experiment_environment, time_step=nothing, gif_env_num=nothing, graph = nothing)
 
     #Plot Boundaries
-    p = plot([0.0],[0.0],legend=false,grid=false)
+    # p = plot([0.0],[0.0],legend=false,grid=false)
+    p = plot([0.0],[0.0],legend=false,grid=false,axis=([], false))
     plot!([env.length], [env.breadth],legend=false)
 
     #Plot Humans in the cart lidar data
