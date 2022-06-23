@@ -74,7 +74,7 @@ function get_new_x_y_theta(current_x, current_y, current_theta, steering_angle,t
 end
 
 function get_discrete_state(environment, x, y)
-    discretization_width = 0.5
+    discretization_width = 0.5*environment.cart.L
     max_num_bins_x = ceil(environment.length/discretization_width)
     discrete_x = clamp(ceil(x/discretization_width),1,max_num_bins_x)
     max_num_bins_y = ceil(environment.breadth/discretization_width)
@@ -156,7 +156,7 @@ function get_action_cost(environment, humans_to_avoid, final_x::Float64, final_y
     end
 
     #Cost from obstacles
-    padding_radius = 2.0
+    padding_radius = environment.cart.L
     for obstacle in environment.obstacles
         euclidean_distance::Float64 = ( (final_x - obstacle.x)^2 + (final_y - obstacle.y)^2 )^ 0.5
         if(euclidean_distance >= obstacle.r + padding_radius)
@@ -217,7 +217,7 @@ function get_action_cost(environment, humans_to_avoid, final_x::Float64, final_y
     return total_cost
 end
 
-function hybrid_a_star_search(start_x, start_y, start_theta, goal_x, goal_y, env,humans_to_avoid)
+function hybrid_a_star_search(start_x, start_y, start_theta, goal_x, goal_y, env, humans_to_avoid, time_limit=0.2)
 
     #Action Set
     set_of_delta_angles = Array{Float64,1}([0.0])
@@ -299,7 +299,7 @@ function hybrid_a_star_search(start_x, start_y, start_theta, goal_x, goal_y, env
                 open[node_key] = new_node.heuristic_cost + new_node.actual_cost
             end
         end
-        if(time()- start_time >= 0.2)
+        if(time()- start_time >= time_limit)
             @show("Time exceeded")
             return path
         end
