@@ -66,7 +66,7 @@ function get_new_x_y_theta(current_x, current_y, current_theta, delta_angle, tim
 end
 
 function get_discrete_state(environment, x, y)
-    discretization_width = 0.5
+    discretization_width = 0.5*environment.cart.L
     max_num_bins_x = ceil(environment.length/discretization_width)
     discrete_x = clamp(ceil(x/discretization_width),1,max_num_bins_x)
     max_num_bins_y = ceil(environment.breadth/discretization_width)
