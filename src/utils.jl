@@ -518,3 +518,82 @@ function check_if_cart_collided_with_static_obstacles(world)
     end
     return false
 end
+
+function check_consistency_personal_copy(io, s)
+    if s.move_count > 0.01*length(s.rngs) && s.move_warning
+        msg = """
+             DESPOT's MemorizingSource random number generator had to move the memory locations of the rngs $(s.move_count) times. If this number was large, it may be affecting performance (profiling is the best way to tell).
+             To suppress this warning, use MemorizingSource(..., move_warning=false).
+             To reduce the number of moves, try using MemorizingSource(..., min_reserve=n) and increase n until the number of moves is low (the final min_reserve was $(s.min_reserve)).
+             """
+        write_and_print(io, msg )
+    end
+end
+
+function write_experiment_details_to_file(rand_noise_generator_seed_for_env,rand_noise_generator_seed_for_sim,
+        rand_noise_generator_seed_for_solver, all_gif_environments, all_observed_environments, all_generated_beliefs_using_complete_lidar_data, all_generated_beliefs,
+        all_generated_trees,all_risky_scenarios,all_actions,all_planners,cart_throughout_path, number_risks, number_of_sudden_stops,
+        time_taken_by_cart, cart_reached_goal_flag, cart_ran_into_static_obstacle_flag, cart_ran_into_boundary_wall_flag, experiment_success_flag, filename)
+
+    d = OrderedDict()
+    d["rand_noise_generator_seed_for_env"] = rand_noise_generator_seed_for_env
+    d["rand_noise_generator_seed_for_sim"] = rand_noise_generator_seed_for_sim
+    # d["rand_noise_generator_seed_for_prm"] = rand_noise_generator_seed_for_prm
+    d["rand_noise_generator_seed_for_solver"] = rand_noise_generator_seed_for_solver
+    d["all_gif_environemnts"] = all_gif_environments
+    d["all_observed_environments"] = all_observed_environments
+    d["all_generated_beliefs_using_complete_lidar_data"] = all_generated_beliefs_using_complete_lidar_data
+    d["all_generated_beliefs"] = all_generated_beliefs
+    #d["all_generated_trees"] = all_generated_trees
+    d["all_risky_scenarios"] = all_risky_scenarios
+    d["all_actions"] = all_actions
+    d["all_planners"] = all_planners
+    #d["cart_throughout_path"] = cart_throughout_path
+    d["number_risks"] = number_risks
+    d["number_of_sudden_stops"] = number_of_sudden_stops
+    d["time_taken_by_cart"] = time_taken_by_cart
+    d["cart_reached_goal_flag"] = cart_reached_goal_flag
+    d["cart_ran_into_static_obstacle_flag"] = cart_ran_into_static_obstacle_flag
+    d["cart_ran_into_boundary_wall_flag"] = cart_ran_into_boundary_wall_flag
+    d["experiment_success_flag"] = experiment_success_flag
+
+    save(filename, d)
+end
+
+function find_distance_between_two_points(p1_x,p1_y, p2_x, p2_y)
+    euclidean_distance = ((p1_x - p2_x)^2 + (p1_y - p2_y)^2)^0.5
+    return euclidean_distance
+end
+
+function is_there_immediate_collision_with_pedestrians(world, pedestrian_distance_threshold)
+    for human in world.complete_cart_lidar_data
+        if( find_if_two_circles_intersect(world.cart.x, world.cart.y, world.cart.L,human.x, human.y, pedestrian_distance_threshold) )
+            return true
+        end
+    end
+    return false
+end
+
+function calculate_mean_and_variance_from_given_dict(given_dict)
+    total_sum = 0.0
+    total_valid_entries = 0
+    for k in keys(given_dict)
+        if(given_dict[k] != nothing)
+            total_sum += given_dict[k]
+            total_valid_entries += 1
+        end
+    end
+
+    given_dict_mean = total_sum/total_valid_entries
+    given_dict_var = 0.0
+
+    for k in keys(given_dict)
+        if(given_dict[k] != nothing)
+            given_dict_var += ( (given_dict[k] - given_dict_mean)^2 )
+        end
+    end
+
+    given_dict_var = given_dict_var/(total_valid_entries-1)
+
+    return given_dict_mean, given_dict_var
+end

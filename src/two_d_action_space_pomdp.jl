@@ -237,8 +237,8 @@ end
 
 function immediate_stop_penalty_pomdp_planning_2D_action_space(immediate_stop_flag, penalty)
     if(immediate_stop_flag)
-        #return penalty/2.0
-        return -50.0
+        return penalty/10.0
+        # return -50.0
     else
         return 0.0
     end
@@ -282,7 +282,7 @@ function POMDPs.gen(m::POMDP_Planner_2D_action_space, s, a, rng)
             immediate_stop_flag = true
         end
         new_cart_velocity = clamp(s.cart.v + a[2], 0.0, m.max_cart_speed)
-        num_time_intervals = 2
+        num_time_intervals = 5
         cart_path::Vector{Tuple{Float64,Float64,Float64}} = update_cart_position_pomdp_planning_2D_action_space(s.cart, a[1], new_cart_velocity, m.world.length,
                                                                                         m.world.breadth, m.cart_goal_reached_distance_threshold, num_time_intervals)
         new_cart_position = cart_path[end]
@@ -296,52 +296,76 @@ function POMDPs.gen(m::POMDP_Planner_2D_action_space, s, a, rng)
         else
             # Simulate all the pedestrians
             for human in s.pedestrians
+                if(s.cart.v!=0.0)
+                    if( find_if_two_circles_intersect(cart_path[1][1], cart_path[1][2], s.cart.L, human.x, human.y, m.pedestrian_distance_threshold) )
+                        new_cart_position = (-100.0, -100.0, -100.0)
+                        collision_with_pedestrian_flag = true
+                        new_human_states = human_state[]
+                        observed_positions = location[ location(-50.0,-50.0) ]
+                        # println("Collision with this human " ,s.pedestrians[human_index] , " ", time_index )
+                        # println("Cart's position is " ,cart_path[time_index] , "\nHuman's position is ", intermediate_human_location )
+                        break
+                    end
+                end
                 modified_human_state,observed_location = update_human_position_pomdp_planning(human, m.world, one_time_step, rng)
                 push!(new_human_states, modified_human_state)
                 push!(observed_positions, observed_location)
             end
+            if(!collision_with_pedestrian_flag)
             #Cart is moving
-            if(new_cart_velocity != 0.0)
-                for time_index in 1:num_time_intervals+1
-                    for human_index in 1:length(s.pedestrians)
-                        intermediate_human_location = get_pedestrian_intermediate_trajectory_point(s.pedestrians[human_index].x,s.pedestrians[human_index].y,
-                                                                        new_human_states[human_index].x,new_human_states[human_index].y, (1/num_time_intervals)*(time_index-1) )
-                        if( find_if_two_circles_intersect(cart_path[time_index][1], cart_path[time_index][2], s.cart.L+0.5,
-                                                    intermediate_human_location[1], intermediate_human_location[2], m.pedestrian_distance_threshold) )
-                            new_cart_position = (-100.0, -100.0, -100.0)
-                            collision_with_pedestrian_flag = true
-                            #new_human_states = human_state[]
-                            observed_positions = location[ location(-50.0,-50.0) ]
-                            break
-                        end
-                    end
-                    if( !collision_with_pedestrian_flag )
-                        #Check if the cart intersects with any static obstacle
-                        for obstacle in m.world.obstacles
+                if(new_cart_velocity != 0.0)
+                    for time_index in 2:num_time_intervals+1
+                        for human_index in 1:length(s.pedestrians)
+                            intermediate_human_location = get_pedestrian_intermediate_trajectory_point(s.pedestrians[human_index].x,s.pedestrians[human_index].y,
+                                                                            new_human_states[human_index].x,new_human_states[human_index].y, (1/num_time_intervals)*(time_index-1) )
                             if( find_if_two_circles_intersect(cart_path[time_index][1], cart_path[time_index][2], s.cart.L,
-                                                                    obstacle.x, obstacle.y,obstacle.r + m.obstacle_distance_threshold) )
+                                                        intermediate_human_location[1], intermediate_human_location[2], m.pedestrian_distance_threshold) )
                                 new_cart_position = (-100.0, -100.0, -100.0)
-                                collision_with_obstacle_flag = true
-                                #new_human_states = human_state[]
+                                collision_with_pedestrian_flag = true
+                                new_human_states = human_state[]
                                 observed_positions = location[ location(-50.0,-50.0) ]
                                 break
                             end
                         end
+                        if( !collision_with_pedestrian_flag )
+                            #Check if the cart intersects with any static obstacle
+                            for obstacle in m.world.obstacles
+                                if( find_if_two_circles_intersect(cart_path[time_index][1], cart_path[time_index][2], s.cart.L,
+                                                                        obstacle.x, obstacle.y,obstacle.r + m.obstacle_distance_threshold) )
+                                    new_cart_position = (-100.0, -100.0, -100.0)
+                                    collision_with_obstacle_flag = true
+                                    new_human_states = human_state[]
+                                    observed_positions = location[ location(-50.0,-50.0) ]
+                                    break
+                                end
+                            end
+                        end
+                        if(collision_with_pedestrian_flag || collision_with_obstacle_flag)
+                            cart_reached_goal_flag = false
+                            break
+                        end
                     end
-                    if(collision_with_pedestrian_flag || collision_with_obstacle_flag)
-                        cart_reached_goal_flag = false
-                        break
+                    #If cart reached the goal and no collision occured, then new_cart_position should be (-100,-100,-100)
+                    # if(cart_reached_goal_flag)
+                    #     #println("Goal reached")
+                    #     new_cart_position = (-100.0, -100.0, -100.0)
+                    #     observed_positions = location[ location(-25.0,-25.0) ]
+                    # end
+                #Cart is stationary
+                else
+                    #Check if the cart intersects with any static obstacle
+                    for obstacle in m.world.obstacles
+                        if( find_if_two_circles_intersect(cart_path[1][1], cart_path[1][2], s.cart.L,
+                                                                obstacle.x, obstacle.y,obstacle.r + m.obstacle_distance_threshold) )
+                            new_cart_position = (-100.0, -100.0, -100.0)
+                            collision_with_obstacle_flag = true
+                            new_human_states = human_state[]
+                            observed_positions = location[ location(-50.0,-50.0) ]
+                            # println("Collision with this obstacle " ,obstacle, " ", time_index )
+                            break
+                        end
                     end
                 end
-                #If cart reached the goal and no collision occured, then new_cart_position should be (-100,-100,-100)
-                # if(cart_reached_goal_flag)
-                #     #println("Goal reached")
-                #     new_cart_position = (-100.0, -100.0, -100.0)
-                #     observed_positions = location[ location(-25.0,-25.0) ]
-                # end
-            #Cart is stationary
-            else
-                #Don't do anything!
             end
         end
     end
@@ -383,23 +407,19 @@ end
 function is_collision_state_pomdp_planning_2D_action_space(s,m)
     if((s.cart.x>m.world.length) || (s.cart.y>m.world.breadth) || (s.cart.x<0.0) || (s.cart.y<0.0))
         return true
-    elseif(s.cart.v == 0.0)
-        return false
-    else
-        if(s.cart.v!=0.0)
-            for human in s.pedestrians
-                if(is_within_range(location(s.cart.x,s.cart.y),location(human.x,human.y),m.pedestrian_distance_threshold))
-                    return true
-                end
-            end
-        end
-        for obstacle in m.world.obstacles
-            if(is_within_range(location(s.cart.x,s.cart.y),location(obstacle.x,obstacle.y),obstacle.r + m.obstacle_distance_threshold))
+    elseif(s.cart.v != 0.0)
+        for human in s.pedestrians
+            if(is_within_range(location(s.cart.x,s.cart.y),location(human.x,human.y),m.pedestrian_distance_threshold + s.cart.L))
                 return true
             end
         end
-        return false
     end
+    for obstacle in m.world.obstacles
+        if(is_within_range(location(s.cart.x,s.cart.y),location(obstacle.x,obstacle.y),obstacle.r + m.obstacle_distance_threshold))
+            return true
+        end
+    end
+    return false
 end
 
 function time_to_goal_pomdp_planning_2D_action_space(s,max_cart_speed)
