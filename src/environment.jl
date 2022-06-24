@@ -290,7 +290,7 @@ function display_env(env::experiment_environment, time_step=nothing, gif_env_num
                 push!(path_y,new_y)
                 current_x, current_y,current_theta = new_x,new_y,new_theta
             end
-            plot!(path_x,path_y,color="black")
+            plot!(path_x,path_y,color="grey",line=(:dot,4))
         #Plotting for gif environments that are 0.1 sec apart
         else
             current_gif_env_time_index = parse(Int, split(gif_env_num,"_")[2])
@@ -327,7 +327,7 @@ function display_env(env::experiment_environment, time_step=nothing, gif_env_num
                 end
                 initial_state = [last(x),last(y),last(theta)]
             end
-            plot!(path_x,path_y,color="black")
+            plot!(path_x,path_y,color="grey",line=(:dot,4))
         end
     end
 
