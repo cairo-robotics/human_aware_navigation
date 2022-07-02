@@ -156,11 +156,11 @@ function update_cart_position_pomdp_planning_2D_action_space(current_cart, delta
                                                                                             goal_distance_threshold, num_time_intervals = 10)
     current_x, current_y, current_theta = current_cart.x, current_cart.y, current_cart.theta
     if(new_cart_speed == 0.0)
-        cart_path = Tuple{Float64,Float64,Float64}[ ( Float64(current_x), Float64(current_y), Float64(current_theta) ) ]
+        cart_path = Tuple{Float64,Float64,Float64}[ (current_x,current_y,current_theta) ]
         cart_path = repeat(cart_path, num_time_intervals+1)
     else
-        cart_path = Tuple{Float64,Float64,Float64}[]
-        push!(cart_path,(Float64(current_x), Float64(current_y), Float64(current_theta)))
+        cart_path = Tuple{Float64,Float64,Float64}[(current_x, current_y, current_theta)]
+        # push!(cart_path,(Float64(current_x), Float64(current_y), Float64(current_theta)))
         arc_length = new_cart_speed
         steering_angle = atan((current_cart.L*delta_angle)/arc_length)
         for i in (1:num_time_intervals)
@@ -520,17 +520,11 @@ end
 
 function reward_to_be_awarded_at_max_depth_in_lower_bound_policy_rollout(m,b)
     #print("HI")
-    # #sleep(5)
     # print(b.depth)
     value_sum = 0.0
     for (s, w) in weighted_particles(b)
-        # cart_distance_to_goal = sqrt( (s.cart.x - s.cart.goal.x)^2 + (s.cart.y - s.cart.goal.y)^2 )
-        # if(cart_distance_to_goal > 1.0)
-        #     value_sum += w*(1/cart_distance_to_goal)*m.goal_reward
-        # end
         value_sum += w*((discount(m)^time_to_goal_pomdp_planning_2D_action_space(s,m.max_cart_speed))*m.goal_reward)
     end
-    #println("HG rules")
     return value_sum
 end
 

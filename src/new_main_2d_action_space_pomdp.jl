@@ -238,7 +238,7 @@ end
 #@code_warntype get_available_actions(POMDP_state_2D_action_space(env.cart,env.humans))
 
 gr()
-run_simulation_flag = false
+run_simulation_flag = true
 write_to_file_flag = false
 create_gif_flag = true
 if(run_simulation_flag)
@@ -258,7 +258,7 @@ if(run_simulation_flag)
     rand_noise_generator_for_solver = MersenneTwister(rand_noise_generator_seed_for_solver)
 
 
-    env = generate_environment_no_obstacles(400, rand_noise_generator_for_env)
+    env = generate_environment_no_obstacles(100, rand_noise_generator_for_env)
     # env = generate_environment_small_circular_obstacles(300, rand_noise_generator_for_env)
     # env = generate_environment_large_circular_obstacles(300, rand_noise_generator_for_env)
     env_right_now = deepcopy(env)
