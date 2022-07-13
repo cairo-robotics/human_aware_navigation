@@ -3,10 +3,14 @@ include("utils.jl")
 include("two_d_action_space_pomdp.jl")
 include("belief_tracker.jl")
 include("simulator.jl")
+include("HJB_generator_functions.jl")
+include("HJB_planner_functions.jl")
+include("HJB_utils.jl")
 using DataStructures
 using FileIO
 using JLD2
 using D3Trees
+using BSON
 
 Base.copy(s::cart_state) = cart_state(s.x, s.y,s.theta,s.v,s.L,s.goal)
 
@@ -98,27 +102,28 @@ function run_one_simulation_2D_POMDP_planner(env_right_now, user_defined_rng, m,
                 check_consistency_personal_copy(io,planner.rs)
                 if(is_there_immediate_collision_with_pedestrians(m.world, m.pedestrian_distance_threshold))
                     if(env_right_now.cart.v == 1.0)
-                        a = (0.0,-1.0)
+                        a = POMDP_2D_action_type(0.0,-1.0,false)
                     elseif(env_right_now.cart.v == 0.0)
-                        a = (0.0,0.0)
+                        a = POMDP_2D_action_type(0.0,0.0,false)
                     else
-                        a = (-10.0,-10.0)
+                        a = POMDP_2D_action_type(-10.0,-10.0,false)
                     end
                 end
-                write_and_print( io, "Action chosen by 2D action space POMDP planner: " * string((a[1]*180/pi, a[2])) )
+                write_and_print( io, "Action chosen by 2D action space POMDP planner: " * string((a.steering_angle, a.delta_velocity)) )
                 dict_key = "t="*string(time_taken_by_cart)
                 # all_generated_trees[dict_key] = deepcopy(info)
                 all_generated_trees[dict_key] = nothing
                 all_actions[dict_key] = a
 
-                if(env_right_now.cart.v!=0 && a[2] == -10.0)
+                if(env_right_now.cart.v!=0 && a.delta_velocity == -10.0)
                     number_of_sudden_stops += 1
                 end
-                env_right_now.cart.v = clamp(env_right_now.cart.v + a[2],0,m.max_cart_speed)
+                env_right_now.cart.v = clamp(env_right_now.cart.v + a.delta_velocity,0,m.max_cart_speed)
 
                 if(env_right_now.cart.v != 0.0)
                     #That means the cart is not stationary and we now have to simulate both cart and the pedestrians.
-                    steering_angle = atan((env_right_now.cart.L*a[1])/env_right_now.cart.v)
+                    # steering_angle = atan((env_right_now.cart.L*a[1])/env_right_now.cart.v)
+                    steering_angle = a.steering_angle
                     current_belief_over_complete_cart_lidar_data, risks_in_simulation = simulate_cart_and_pedestrians_and_generate_gif_environments_when_cart_moving(
                                                                         env_right_now,current_belief_over_complete_cart_lidar_data, all_gif_environments,
                                                                         all_risky_scenarios, time_taken_by_cart,num_humans_to_care_about_while_pomdp_planning,
@@ -201,6 +206,60 @@ function run_one_simulation_2D_POMDP_planner(env_right_now, user_defined_rng, m,
                 time_taken_by_cart, cart_reached_goal_flag, cart_ran_into_static_obstacle_flag, cart_ran_into_boundary_wall_flag,experiment_success_flag
 end
 
+function get_actions_holonomic_fmm(m::POMDP_Planner_2D_action_space,b)
+    pomdp_state = first(particles(b))
+    if(pomdp_state.cart.v == 0.0)
+        a = [ POMDP_2D_action_type(-pi/4,1.0,false) , POMDP_2D_action_type(-pi/6,1.0,false),
+            POMDP_2D_action_type(-pi/12,1.0,false), POMDP_2D_action_type(0.0,1.0,false),
+            POMDP_2D_action_type(0.0,0.0,false), POMDP_2D_action_type(pi/12,1.0,false),
+            POMDP_2D_action_type(pi/6,1.0,false), POMDP_2D_action_type(pi/4,1.0,false),
+            POMDP_2D_action_type(-10.0,1.0,true) ]
+    # elseif (pomdp_state.cart.v == m.max_cart_speed)
+    else
+        a = [ POMDP_2D_action_type(-pi/4,0.0,false) , POMDP_2D_action_type(-pi/6,0.0,false),
+            POMDP_2D_action_type(-pi/12,0.0,false), POMDP_2D_action_type(0.0,-1.0,false),
+            POMDP_2D_action_type(0.0,0.0,false),POMDP_2D_action_type(0.0,1.0,false),
+            POMDP_2D_action_type(pi/12,0.0,false),POMDP_2D_action_type(pi/6,0.0,false),
+            POMDP_2D_action_type(pi/4,0.0,false), POMDP_2D_action_type(-10.0,0.0,true),
+            POMDP_2D_action_type(-10.0,-10.0,true)]
+    end
+    return a
+end
+
+function get_actions_NHV_HJB(m::POMDP_Planner_2D_action_space,b)
+    pomdp_state = first(particles(b))
+    # required_orientation = get_heading_angle( pomdp_state.cart.goal.x, pomdp_state.cart.goal.y, pomdp_state.cart.x, pomdp_state.cart.y)
+    # delta_angle = required_orientation - pomdp_state.cart.theta
+    # abs_delta_angle = abs(delta_angle)
+    # if(abs_delta_angle<=pi)
+    #     delta_angle = clamp(delta_angle, -pi/4, pi/4)
+    # else
+    #     if(delta_angle>=0.0)
+    #         delta_angle = clamp(delta_angle-2*pi, -pi/4, pi/4)
+    #     else
+    #         delta_angle = clamp(delta_angle+2*pi, -pi/4, pi/4)
+    #     end
+    # end
+    max_steering_angle = 0.0846204431870001
+    # rollout_steering_angle = clamp(delta_angle, -max_steering_angle, max_steering_angle)
+    if(pomdp_state.cart.v == 0.0)
+        a = [ POMDP_2D_action_type(-max_steering_angle,1.0,false) , POMDP_2D_action_type(-2/3*max_steering_angle,1.0,false),
+            POMDP_2D_action_type(-1/3*max_steering_angle,1.0,false), POMDP_2D_action_type(0.0,1.0,false),
+            POMDP_2D_action_type(0.0,0.0,false), POMDP_2D_action_type(1/3*max_steering_angle,1.0,false),
+            POMDP_2D_action_type(2/3*max_steering_angle,1.0,false), POMDP_2D_action_type(max_steering_angle,1.0,false),
+            POMDP_2D_action_type(-10.0,1.0,true) ]
+    # elseif (pomdp_state.cart.v == m.max_cart_speed)
+    else
+        a = [ POMDP_2D_action_type(-max_steering_angle,0.0,false) , POMDP_2D_action_type(-2/3*max_steering_angle,0.0,false),
+            POMDP_2D_action_type(-1/3*max_steering_angle,0.0,false), POMDP_2D_action_type(0.0,-1.0,false),
+            POMDP_2D_action_type(0.0,0.0,false),POMDP_2D_action_type(0.0,1.0,false),
+            POMDP_2D_action_type(1/3*max_steering_angle,0.0,false),POMDP_2D_action_type(2/3*max_steering_angle,0.0,false),
+            POMDP_2D_action_type(max_steering_angle,0.0,false), POMDP_2D_action_type(-10.0,0.0,true),
+            POMDP_2D_action_type(-10.0,-10.0,false)]
+    end
+    return a
+end
+
 function get_actions_non_holonomic(b)
     pomdp_state = first(particles(b))
     required_orientation = get_heading_angle( pomdp_state.cart.goal.x, pomdp_state.cart.goal.y, pomdp_state.cart.x, pomdp_state.cart.y)
@@ -241,13 +300,12 @@ gr()
 run_simulation_flag = true
 write_to_file_flag = false
 create_gif_flag = true
+run_HJB_flag = false
 if(run_simulation_flag)
 
     #Set seeds for different random number generators randomly
     rand_noise_generator_seed_for_env = rand(UInt32)
     rand_noise_generator_seed_for_sim = rand(UInt32)
-    # rand_noise_generator_for_env = MersenneTwister(rand_noise_generator_seed_for_env)
-    # rand_noise_generator_for_sim = MersenneTwister(rand_noise_generator_seed_for_sim)
 
     #Set seeds for different random number generators manually
     # rand_noise_generator_seed_for_env = 4258915202
@@ -257,11 +315,20 @@ if(run_simulation_flag)
     rand_noise_generator_for_sim = MersenneTwister(rand_noise_generator_seed_for_sim)
     rand_noise_generator_for_solver = MersenneTwister(rand_noise_generator_seed_for_solver)
 
+    max_vehicle_speed = 4.0
+    HJB_planning_time_step = 0.1
+    max_plan_steps = 2e4
 
-    env = generate_environment_no_obstacles(100, rand_noise_generator_for_env)
-    # env = generate_environment_small_circular_obstacles(300, rand_noise_generator_for_env)
+    # env = generate_environment_no_obstacles(300, rand_noise_generator_for_env)
+    env = generate_environment_small_circular_obstacles(100, rand_noise_generator_for_env)
     # env = generate_environment_large_circular_obstacles(300, rand_noise_generator_for_env)
     env_right_now = deepcopy(env)
+    HJB_env, HJB_vehicle, HJB_action_list = get_HJB_env_vehicle_actions(env,max_vehicle_speed)
+    U_HJB,T,O = get_HJB_value_function(HJB_env,HJB_vehicle,HJB_action_list,run_HJB_flag)
+    start_pose = [env.cart.x, env.cart.y, env.cart.theta]
+    x_path, u_path, num_steps = HJB_planner(start_pose, U_HJB, HJB_planning_time_step, max_plan_steps, HJB_action_list, O, HJB_env, HJB_vehicle)
+    plot_HJB_results(HJB_env, HJB_vehicle, start_pose, x_path)
+    println(HJB_action(start_pose, U_HJB, HJB_action_list, O, HJB_env, HJB_vehicle))
 
     filename = "output_just_2d_action_space_pomdp_planner.txt"
     io = open(filename,"w")
@@ -273,11 +340,12 @@ if(run_simulation_flag)
     # discount_factor::Float64; pedestrian_distance_threshold::Float64; pedestrian_collision_penalty::Float64;
     # obstacle_distance_threshold::Float64; obstacle_collision_penalty::Float64; goal_reward_distance_threshold::Float64;
     # cart_goal_reached_distance_threshold::Float64; goal_reward::Float64; max_cart_speed::Float64; world::experiment_environment
-    golfcart_2D_action_space_pomdp = POMDP_Planner_2D_action_space(0.97,1.0,-100.0,2.0,-100.0,0.0,1.0,1000.0,4.0,env_right_now)
+    golfcart_2D_action_space_pomdp = POMDP_Planner_2D_action_space(0.97,1.0,-100.0,2.0,-100.0,0.0,1.0,1000.0,
+                                max_vehicle_speed,env_right_now,U_HJB,HJB_action_list,O,HJB_env,HJB_vehicle)
     discount(p::POMDP_Planner_2D_action_space) = p.discount_factor
     isterminal(::POMDP_Planner_2D_action_space, s::POMDP_state_2D_action_space) = is_terminal_state_pomdp_planning(s,location(-100.0,-100.0));
     #actions(::POMDP_Planner_2D_action_space) = [(-pi/4,0.0),(-pi/6,0.0),(-pi/12,0.0),(0.0,-1.0),(0.0,0.0),(0.0,1.0),(pi/12,0.0),(pi/6,0.0),(pi/4,0.0)]
-    actions(m::POMDP_Planner_2D_action_space,b) = get_actions_non_holonomic(b)
+    actions(m::POMDP_Planner_2D_action_space,b) = get_actions_NHV_HJB(m,b)
 
     solver = DESPOTSolver(bounds=IndependentBounds(DefaultPolicyLB(FunctionPolicy(calculate_lower_bound_policy_pomdp_planning_2D_action_space),max_depth=100),
                             calculate_upper_bound_value_pomdp_planning_2D_action_space, check_terminal=true),K=50,D=100,T_max=0.5, tree_in_info=true,

@@ -67,7 +67,7 @@ function generate_environment_no_obstacles(number_of_humans, user_defined_rng)
     all_obstacle_list = obstacle_location[]
     max_num_humans = number_of_humans
 
-    golfcart = cart_state(1.0,25.0,0.0,0.0,0.5,cart_goal)
+    golfcart = cart_state(1.0,25.0,0.0,0.0,0.324,cart_goal)
     initial_cart_lidar_data = Array{human_state,1}()
     initial_complete_cart_lidar_data = Array{human_state,1}()
 
@@ -106,16 +106,10 @@ function generate_environment_small_circular_obstacles(number_of_humans,user_def
     o4 = obstacle_location(30.0,20.0,5.0)
     o5 = obstacle_location(70.0,20.0,5.0)
     o6 = obstacle_location(80.0,50.0,5.0)
-    #o2 = obstacle_location(50.0,50.0,10.0)
-    # o3 = obstacle_location(50.0,30.0,15.0)
-    #o2 = obstacle_location(33.0,69.0,8.0)
-    #o2 = obstacle_location(25.0,50.0,25.0)
-    # o3 = obstacle_location(73.0,79.0,3.0)
-    # o4 = obstacle_location(65.0,40.0,7.0)
-    # all_obstacle_list = [o1,o2,o3,o4]
     all_obstacle_list = [o1,o2,o3,o4,o5,o6]
 
-    golfcart = cart_state(1.0,25.0,0.0,0.0,1.0,cart_goal)
+    golfcart = cart_state(1.0, 25.0, 0.0, 0.0, 0.324, cart_goal)
+    # golfcart = cart_state(1.0,25.0,0.0,0.0,1.0,cart_goal)
     initial_cart_lidar_data = Array{human_state,1}()
     initial_complete_cart_lidar_data = Array{human_state,1}()
 
