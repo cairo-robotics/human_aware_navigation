@@ -120,6 +120,79 @@ function simulate_cart_and_pedestrians_and_generate_gif_environments_when_cart_m
     return final_updated_belief, number_risks
 end
 
+#Returns the updated belief over humans and number of risks encountered
+function simulate_cart_and_pedestrians_and_generate_gif_environments_when_cart_moving_along_HJB_path(env_right_now, current_belief,
+                                                            all_gif_environments, all_risky_scenarios, time_stamp,
+                                                            num_humans_to_care_about_while_pomdp_planning, cone_half_angle,
+                                                            lidar_range, closest_ped_dist_threshold, user_defined_rng, HJB_value_function,
+                                                            HJB_actions_list, HJB_obstacle_binary,HJB_env, HJB_vehicle)
+
+    number_risks = 0
+
+    cart_path = update_cart_position_pomdp_planning_2D_action_space_using_HJB(env_right_now.cart, env_right_now.cart.v, env_right_now.length, env_right_now.breadth,
+                                                                                HJB_value_function,HJB_actions_list,HJB_obstacle_binary,
+                                                                                HJB_env,HJB_vehicle,10)
+    println(cart_path)
+    cart_path = cart_path[2:end]
+    # cart_final_orientation = get_heading_angle(cart_path[end][1],cart_path[end][2],env_right_now.cart.x, env_right_now.cart.y)
+    # delta_angle::Float64 = cart_final_orientation - env_right_now.cart.theta
+    #Simulate for 0 to 0.5 seconds
+    env_before_humans_and_cart_simulated_for_first_half_second = deepcopy(env_right_now)
+    for i in 1:5
+        env_right_now.cart.x, env_right_now.cart.y, env_right_now.cart.theta = cart_path[i][1], cart_path[i][2], wrap_between_0_and_2Pi(cart_path[i][3])
+        # env_right_now.cart.theta = env_right_now.cart.theta + (delta_angle * (1/10))
+        env_right_now.humans = move_human_for_one_time_step_in_actual_environment(env_right_now,0.1,user_defined_rng)
+        env_right_now.complete_cart_lidar_data = get_lidar_data(env_right_now,lidar_range)
+        env_right_now.cart_lidar_data = get_nearest_n_pedestrians_in_cone_pomdp_planning_1D_or_2D_action_space(env_right_now.cart,
+                                                            env_right_now.complete_cart_lidar_data, num_humans_to_care_about_while_pomdp_planning,
+                                                            closest_ped_dist_threshold, cone_half_angle)
+
+        dict_key = "t="*string(time_stamp)*"_"*string(i)
+        all_gif_environments[dict_key] =  deepcopy(env_right_now)
+        risks_in_this_scenario = get_count_number_of_risks(env_right_now)
+        if(risks_in_this_scenario!= 0)
+            number_risks += risks_in_this_scenario
+            all_risky_scenarios[dict_key] =  deepcopy(env_right_now)
+        end
+        initial_state = [env_right_now.cart.x,env_right_now.cart.y,env_right_now.cart.theta]
+    end
+
+    #Update your belief after first 0.5 seconds
+    updated_belief = update_belief_from_old_world_and_new_world(current_belief,
+                                                    env_before_humans_and_cart_simulated_for_first_half_second, env_right_now)
+
+    #Simulate for 0.5 to 1 second
+    env_before_humans_and_cart_simulated_for_second_half_second = deepcopy(env_right_now)
+    for i in 6:10
+        env_right_now.cart.x, env_right_now.cart.y, env_right_now.cart.theta = cart_path[i][1], cart_path[i][2], wrap_between_0_and_2Pi(cart_path[i][3])
+        # env_right_now.cart.x, env_right_now.cart.y = cart_path[i][1], cart_path[i][2]
+        # env_right_now.cart.theta = env_right_now.cart.theta + (delta_angle * (1/10))
+        env_right_now.humans = move_human_for_one_time_step_in_actual_environment(env_right_now,0.1,user_defined_rng)
+        if(i==10)
+            respawn_humans(env_right_now, user_defined_rng)
+        end
+        env_right_now.complete_cart_lidar_data = get_lidar_data(env_right_now,lidar_range)
+        env_right_now.cart_lidar_data = get_nearest_n_pedestrians_in_cone_pomdp_planning_1D_or_2D_action_space(env_right_now.cart,
+                                                            env_right_now.complete_cart_lidar_data, num_humans_to_care_about_while_pomdp_planning,
+                                                            closest_ped_dist_threshold, cone_half_angle)
+
+        dict_key = "t="*string(time_stamp)*"_"*string(i)
+        all_gif_environments[dict_key] =  deepcopy(env_right_now)
+        risks_in_this_scenario = get_count_number_of_risks(env_right_now)
+        if(risks_in_this_scenario!= 0)
+            number_risks += risks_in_this_scenario
+            all_risky_scenarios[dict_key] =  deepcopy(env_right_now)
+        end
+        initial_state = [env_right_now.cart.x,env_right_now.cart.y,env_right_now.cart.theta]
+    end
+
+    #Update your belief after second 0.5 seconds
+    final_updated_belief = update_belief_from_old_world_and_new_world(updated_belief,
+                                                    env_before_humans_and_cart_simulated_for_second_half_second, env_right_now)
+
+    return final_updated_belief, number_risks
+end
+
 #Functions for simulating the cart and pedestrians for the 1D planner
 
 #Returns the updated belief over humans and number of risks encountered

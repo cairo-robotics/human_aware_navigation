@@ -41,7 +41,7 @@ mutable struct POMDP_Planner_2D_action_space <: POMDPs.POMDP{POMDP_state_2D_acti
     world::experiment_environment
     HJB_value_function::Array{Float64,3}
     HJB_actions::Matrix{Vector{Float64}}
-    HJB_obstacle_bibary::Array{Bool,3}
+    HJB_obstacle_binary::Array{Bool,3}
     HJB_env::Environment
     HJB_vehicle::Vehicle
 end
@@ -201,12 +201,12 @@ function update_cart_position_pomdp_planning_2D_action_space(current_cart, steer
     #@show(current_cart_position,steering_angle, new_cart_speed, cart_path)
     return cart_path
 end
-#@code_warntype update_cart_position_pomdp_planning_2D_action_space(env.cart, pi/12, 5.0, 100.0,100.0)
+#@code_warntype update_cart_position_pomdp_planning_2D_action_space(env.cart, pi/12, 5.0, 100.0,100.0,2.0)
 #update_cart_position_pomdp_planning_2D_action_space(env.cart, pi/12, 5.0, 100.0,100.0,1.0)
 
 
 function update_cart_position_pomdp_planning_2D_action_space_using_HJB(current_cart, new_cart_speed, world_length, world_breadth,
-                                                                            HJB_value_function,HJB_actions_list,HJB_obstacle_bibary,
+                                                                            HJB_value_function,HJB_actions_list,HJB_obstacle_binary,
                                                                             HJB_env,HJB_vehicle, num_time_intervals = 10)
 
     current_x, current_y, current_theta = current_cart.x, current_cart.y, current_cart.theta
@@ -217,8 +217,9 @@ function update_cart_position_pomdp_planning_2D_action_space_using_HJB(current_c
         cart_path = Tuple{Float64,Float64,Float64}[ ( Float64(current_x), Float64(current_y), Float64(current_theta) ) ]
         arc_length = new_cart_speed
         for i in (1:num_time_intervals)
-            curent_action_tuple = HJB_action([current_x,current_y,current_theta], HJB_value_function, HJB_actions_list, HJB_obstacle_bibary,
+            curent_action_tuple = HJB_action([current_x,current_y,current_theta], HJB_value_function, HJB_actions_list, HJB_obstacle_binary,
                                                                 HJB_env, HJB_vehicle)
+            arc_length = curent_action_tuple[1]
             if(curent_action_tuple[2] == 0.0)
                 new_theta = current_theta
                 new_x = current_x + arc_length*cos(current_theta)*(1/num_time_intervals)
@@ -241,8 +242,8 @@ function update_cart_position_pomdp_planning_2D_action_space_using_HJB(current_c
     end
     return cart_path
 end
-# @benchmark update_cart_position_pomdp_planning_2D_action_space_using_fmm_gradients(cart_state(10.0, 25.0, 0.0, 0.0, 1.0, location(100.0, 75.0)), 2.0, env.length, env.breadth, g,0.1,0.1, 2)
-# @code_warntype update_cart_position_pomdp_planning_2D_action_space_using_fmm_gradients(cart_state(10.0, 25.0, 0.0, 0.0, 1.0, location(100.0, 75.0)), 2.0, env.length, env.breadth, g,0.1,0.1, 2)
+# @benchmark update_cart_position_pomdp_planning_2D_action_space_using_HJB(cart_state(10.0, 25.0, 0.0, 0.0, 1.0, location(100.0, 75.0)), 4.0, 100.0,100.0, U_HJB, HJB_action_list, O, HJB_env, HJB_vehicle)
+# @code_warntype update_cart_position_pomdp_planning_2D_action_space_using_HJB(cart_state(10.0, 25.0, 0.0, 0.0, 1.0, location(100.0, 75.0)), 4.0, 100.0,100.0, U_HJB, HJB_action_list, O, HJB_env, HJB_vehicle)
 
 
 #************************************************************************************************
@@ -316,13 +317,13 @@ function POMDPs.gen(m::POMDP_Planner_2D_action_space, s, a, rng)
     observed_positions = location[]
 
     if(is_within_range_check_with_points(s.cart.x,s.cart.y, s.cart.goal.x, s.cart.goal.y, m.cart_goal_reached_distance_threshold))
-        #println("Goal reached")
+        println("Goal reached")
         new_cart_position = (-100.0, -100.0, -100.0)
         cart_reached_goal_flag = true
         new_cart_velocity = clamp(s.cart.v + a.delta_velocity, 0.0, m.max_cart_speed)
         push!(observed_positions, location(-25.0,-25.0))
     elseif( (s.cart.x>m.world.length) || (s.cart.y>m.world.breadth) || (s.cart.x<0.0) || (s.cart.y<0.0) )
-        #print("Running into wall")
+        print("Running into wall")
         new_cart_position = (-100.0, -100.0, -100.0)
         collision_with_obstacle_flag = true
         new_cart_velocity = clamp(s.cart.v + a.delta_velocity, 0.0, m.max_cart_speed)
@@ -339,7 +340,7 @@ function POMDPs.gen(m::POMDP_Planner_2D_action_space, s, a, rng)
         num_time_intervals = 5
         if(a.HJB_path_flag)
             cart_path = update_cart_position_pomdp_planning_2D_action_space_using_HJB(s.cart, new_cart_velocity, m.world.length,
-                                                                                        m.world.breadth, m.HJB_value_function, m.HJB_actions,m.HJB_obstacle_bibary,
+                                                                                        m.world.breadth, m.HJB_value_function, m.HJB_actions,m.HJB_obstacle_binary,
                                                                                         m.HJB_env,m.HJB_vehicle, num_time_intervals)
         else
             cart_path::Vector{Tuple{Float64,Float64,Float64}} = update_cart_position_pomdp_planning_2D_action_space(s.cart, a.steering_angle, new_cart_velocity, m.world.length,
@@ -519,12 +520,15 @@ function calculate_lower_bound_policy_pomdp_planning_2D_action_space(b)
     max_steering_angle = 0.475
     #This bool is also used to check if all the states in the belief are terminal or not.
     first_execution_flag = true
-
+    # if(b.depth >= 90)
+    #     pomdp_state = first(particles(b))
+    #     println(b.depth, " ", pomdp_state.cart)
+    # end
     for (s, w) in weighted_particles(b)
         if(s.cart.x == -100.0 && s.cart.y == -100.0)
             continue
         else
-            dist_to_closest_human = 200.0  #Some really big infeasible number (not Inf because avoid the type mismatch error)
+            dist_to_closest_human = 200.0  #Some really big infeasible number (not Inf to avoid the type mismatch error)
             for human in s.pedestrians
                 euclidean_distance = sqrt((s.cart.x - human.x)^2 + (s.cart.y - human.y)^2)
                 if(euclidean_distance < dist_to_closest_human)

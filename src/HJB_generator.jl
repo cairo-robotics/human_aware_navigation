@@ -20,8 +20,9 @@ HJB_env, HJB_vehicle, HJB_actions = get_HJB_env_vehicle_actions(actual_env,4.0)
 U_HJB,T,O = get_HJB_value_function(HJB_env,HJB_vehicle,HJB_actions,run_HJB_flag)
 
 # generate optimal path
-start_pose = [15.2, 50.1, -0.5*pi]
-x_path, u_path, num_steps = HJB_planner(start_pose, U_HJB, dt, max_plan_steps, HJB_actions, O, HJB_env, HJB_vehicle)
+start_pose = [1.0, 25.0, 0.0]
+start_pose = [4.346092283518907, 2.0907808788783315, 3.718524340685583]
+x_path, u_path, num_steps = @btime HJB_planner(start_pose, U_HJB, dt, max_plan_steps, HJB_actions, O, HJB_env, HJB_vehicle)
 path_time = num_steps*dt
 println("path execution time: ", path_time, " sec")
 plot_HJB_results(HJB_env, HJB_vehicle, start_pose, x_path)

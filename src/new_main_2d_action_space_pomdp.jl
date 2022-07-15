@@ -37,7 +37,7 @@ function run_one_simulation_2D_POMDP_planner(env_right_now, user_defined_rng, m,
     all_risky_scenarios = OrderedDict()
     all_actions = OrderedDict()
     all_planners = OrderedDict()
-    MAX_TIME_LIMIT = 300
+    MAX_TIME_LIMIT = 100
 
     #Sense humans near cart before moving
     #Generate Initial Lidar Data and Belief for humans near cart
@@ -82,7 +82,7 @@ function run_one_simulation_2D_POMDP_planner(env_right_now, user_defined_rng, m,
 
     # try
         #Start Simulating for t>1
-        while(!is_within_range(location(env_right_now.cart.x,env_right_now.cart.y), env_right_now.cart.goal, 1.0))
+        while(!is_within_range(location(env_right_now.cart.x,env_right_now.cart.y), env_right_now.cart.goal, 2.0))
             #display_env(env_right_now)
             io = open(filename,"a")
             cart_ran_into_boundary_wall_flag = check_if_cart_collided_with_boundary_wall(env_right_now)
@@ -111,8 +111,8 @@ function run_one_simulation_2D_POMDP_planner(env_right_now, user_defined_rng, m,
                 end
                 write_and_print( io, "Action chosen by 2D action space POMDP planner: " * string((a.steering_angle, a.delta_velocity)) )
                 dict_key = "t="*string(time_taken_by_cart)
-                # all_generated_trees[dict_key] = deepcopy(info)
-                all_generated_trees[dict_key] = nothing
+                all_generated_trees[dict_key] = deepcopy(info)
+                # all_generated_trees[dict_key] = nothing
                 all_actions[dict_key] = a
 
                 if(env_right_now.cart.v!=0 && a.delta_velocity == -10.0)
@@ -124,11 +124,19 @@ function run_one_simulation_2D_POMDP_planner(env_right_now, user_defined_rng, m,
                     #That means the cart is not stationary and we now have to simulate both cart and the pedestrians.
                     # steering_angle = atan((env_right_now.cart.L*a[1])/env_right_now.cart.v)
                     steering_angle = a.steering_angle
-                    current_belief_over_complete_cart_lidar_data, risks_in_simulation = simulate_cart_and_pedestrians_and_generate_gif_environments_when_cart_moving(
+                    if(a.HJB_path_flag != true)
+                        current_belief_over_complete_cart_lidar_data, risks_in_simulation = simulate_cart_and_pedestrians_and_generate_gif_environments_when_cart_moving(
                                                                         env_right_now,current_belief_over_complete_cart_lidar_data, all_gif_environments,
                                                                         all_risky_scenarios, time_taken_by_cart,num_humans_to_care_about_while_pomdp_planning,
                                                                         cone_half_angle, lidar_range, m.pedestrian_distance_threshold,
                                                                         user_defined_rng, steering_angle)
+                    else
+                        current_belief_over_complete_cart_lidar_data, risks_in_simulation = simulate_cart_and_pedestrians_and_generate_gif_environments_when_cart_moving_along_HJB_path(
+                                                                        env_right_now, current_belief_over_complete_cart_lidar_data,all_gif_environments,
+                                                                        all_risky_scenarios, time_taken_by_cart,num_humans_to_care_about_while_pomdp_planning,
+                                                                        cone_half_angle,lidar_range, m.pedestrian_distance_threshold, user_defined_rng,
+                                                                        m.HJB_value_function, m.HJB_actions, m.HJB_obstacle_binary, m.HJB_env, m.HJB_vehicle)
+                    end
                     current_belief =  get_belief_for_selected_humans_from_belief_over_complete_lidar_data(current_belief_over_complete_cart_lidar_data,
                                                                         env_right_now.complete_cart_lidar_data, env_right_now.cart_lidar_data)
                     number_risks += risks_in_simulation
@@ -152,7 +160,7 @@ function run_one_simulation_2D_POMDP_planner(env_right_now, user_defined_rng, m,
                 all_generated_beliefs_using_complete_lidar_data[dict_key] = current_belief_over_complete_cart_lidar_data
                 all_generated_beliefs[dict_key] = current_belief
                 cart_throughout_path[dict_key] = copy(env_right_now.cart)
-
+                display_env(env_right_now)
                 write_and_print( io, "Modified cart state = " * string(env_right_now.cart) )
                 write_and_print( io, "************************************************************************" )
 
@@ -228,31 +236,20 @@ end
 
 function get_actions_NHV_HJB(m::POMDP_Planner_2D_action_space,b)
     pomdp_state = first(particles(b))
-    # required_orientation = get_heading_angle( pomdp_state.cart.goal.x, pomdp_state.cart.goal.y, pomdp_state.cart.x, pomdp_state.cart.y)
-    # delta_angle = required_orientation - pomdp_state.cart.theta
-    # abs_delta_angle = abs(delta_angle)
-    # if(abs_delta_angle<=pi)
-    #     delta_angle = clamp(delta_angle, -pi/4, pi/4)
-    # else
-    #     if(delta_angle>=0.0)
-    #         delta_angle = clamp(delta_angle-2*pi, -pi/4, pi/4)
-    #     else
-    #         delta_angle = clamp(delta_angle+2*pi, -pi/4, pi/4)
-    #     end
-    # end
     max_steering_angle = 0.0846204431870001
+    change_in_speed = 0.25
     # rollout_steering_angle = clamp(delta_angle, -max_steering_angle, max_steering_angle)
     if(pomdp_state.cart.v == 0.0)
-        a = [ POMDP_2D_action_type(-max_steering_angle,1.0,false) , POMDP_2D_action_type(-2/3*max_steering_angle,1.0,false),
-            POMDP_2D_action_type(-1/3*max_steering_angle,1.0,false), POMDP_2D_action_type(0.0,1.0,false),
-            POMDP_2D_action_type(0.0,0.0,false), POMDP_2D_action_type(1/3*max_steering_angle,1.0,false),
-            POMDP_2D_action_type(2/3*max_steering_angle,1.0,false), POMDP_2D_action_type(max_steering_angle,1.0,false),
-            POMDP_2D_action_type(-10.0,1.0,true) ]
+        a = [ POMDP_2D_action_type(-max_steering_angle,change_in_speed,false) , POMDP_2D_action_type(-2/3*max_steering_angle,change_in_speed,false),
+            POMDP_2D_action_type(-1/3*max_steering_angle,change_in_speed,false), POMDP_2D_action_type(0.0,change_in_speed,false),
+            POMDP_2D_action_type(0.0,change_in_speed,false), POMDP_2D_action_type(1/3*max_steering_angle,change_in_speed,false),
+            POMDP_2D_action_type(2/3*max_steering_angle,change_in_speed,false), POMDP_2D_action_type(max_steering_angle,change_in_speed,false),
+            POMDP_2D_action_type(-10.0,change_in_speed,true) ]
     # elseif (pomdp_state.cart.v == m.max_cart_speed)
     else
         a = [ POMDP_2D_action_type(-max_steering_angle,0.0,false) , POMDP_2D_action_type(-2/3*max_steering_angle,0.0,false),
-            POMDP_2D_action_type(-1/3*max_steering_angle,0.0,false), POMDP_2D_action_type(0.0,-1.0,false),
-            POMDP_2D_action_type(0.0,0.0,false),POMDP_2D_action_type(0.0,1.0,false),
+            POMDP_2D_action_type(-1/3*max_steering_angle,0.0,false), POMDP_2D_action_type(0.0,-change_in_speed,false),
+            POMDP_2D_action_type(0.0,0.0,false),POMDP_2D_action_type(0.0,change_in_speed,false),
             POMDP_2D_action_type(1/3*max_steering_angle,0.0,false),POMDP_2D_action_type(2/3*max_steering_angle,0.0,false),
             POMDP_2D_action_type(max_steering_angle,0.0,false), POMDP_2D_action_type(-10.0,0.0,true),
             POMDP_2D_action_type(-10.0,-10.0,false)]
@@ -320,7 +317,7 @@ if(run_simulation_flag)
     max_plan_steps = 2e4
 
     # env = generate_environment_no_obstacles(300, rand_noise_generator_for_env)
-    env = generate_environment_small_circular_obstacles(100, rand_noise_generator_for_env)
+    env = generate_environment_small_circular_obstacles(300, rand_noise_generator_for_env)
     # env = generate_environment_large_circular_obstacles(300, rand_noise_generator_for_env)
     env_right_now = deepcopy(env)
     HJB_env, HJB_vehicle, HJB_action_list = get_HJB_env_vehicle_actions(env,max_vehicle_speed)
@@ -340,7 +337,7 @@ if(run_simulation_flag)
     # discount_factor::Float64; pedestrian_distance_threshold::Float64; pedestrian_collision_penalty::Float64;
     # obstacle_distance_threshold::Float64; obstacle_collision_penalty::Float64; goal_reward_distance_threshold::Float64;
     # cart_goal_reached_distance_threshold::Float64; goal_reward::Float64; max_cart_speed::Float64; world::experiment_environment
-    golfcart_2D_action_space_pomdp = POMDP_Planner_2D_action_space(0.97,1.0,-100.0,2.0,-100.0,0.0,1.0,1000.0,
+    golfcart_2D_action_space_pomdp = POMDP_Planner_2D_action_space(0.97,1.0,-100.0,2.0,-100.0,0.0,2.0,1000.0,
                                 max_vehicle_speed,env_right_now,U_HJB,HJB_action_list,O,HJB_env,HJB_vehicle)
     discount(p::POMDP_Planner_2D_action_space) = p.discount_factor
     isterminal(::POMDP_Planner_2D_action_space, s::POMDP_state_2D_action_space) = is_terminal_state_pomdp_planning(s,location(-100.0,-100.0));
