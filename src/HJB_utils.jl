@@ -25,7 +25,7 @@ function get_HJB_env_vehicle_actions(world, max_vehicle_speed)
     vehicle_length = 0.5207      # length [m]
     vehicle_width = 0.2762      # width [m]
     b2a = 0.0889    # rear bumber to rear axle [m]
-    HJB_vehicle = Vehicle(max_vehicle_speed, 0.2*max_vehicle_speed, max_steering_angle, wheelbase, vehicle_length, vehicle_width, b2a)
+    HJB_vehicle = Vehicle(max_vehicle_speed, 0.5*max_vehicle_speed, max_steering_angle, wheelbase, vehicle_length, vehicle_width, b2a)
     Am = [[a_v,a_phi] for a_v in [-HJB_vehicle.c_vb, HJB_vehicle.c_vf], a_phi in [-HJB_vehicle.c_phi, 0.0, HJB_vehicle.c_phi]]
     HJB_actions = reshape(Am, (length(Am),1))
     sort!(HJB_actions, dims=1)

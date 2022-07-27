@@ -131,9 +131,10 @@ function HJB_action(x, U, A, O, env::Environment, veh::Vehicle)
     # calculate optimal action
     vdot_min = Inf
     a_opt = A[1]
-    for i in 1:size(A,1)
+    reduced_actions = A[4:end]
+    for i in 1:size(reduced_actions,1)
         xs = SVector{3, Float64}(x)     # TO-DO: clean up variable types
-        xdot = car_EoM(xs, A[i], veh)
+        xdot = car_EoM(xs, reduced_actions[i], veh)
 
         vdot = dot(dV, xdot)
 
@@ -148,7 +149,7 @@ function HJB_action(x, U, A, O, env::Environment, veh::Vehicle)
 
         if vdot < vdot_min
             vdot_min = vdot
-            a_opt = A[i]
+            a_opt = reduced_actions[i]
         end
     end
 

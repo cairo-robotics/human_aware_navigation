@@ -22,7 +22,7 @@ function run_one_simulation_2D_POMDP_planner(env_right_now, user_defined_rng, m,
     one_time_step = 0.5
     lidar_range = 30
     num_humans_to_care_about_while_pomdp_planning = 6
-    cone_half_angle::Float64 = (2/3)*pi
+    cone_half_angle::Float64 = (1)*pi
     number_of_sudden_stops = 0
     cart_ran_into_boundary_wall_flag = false
     cart_ran_into_static_obstacle_flag = false
@@ -82,7 +82,7 @@ function run_one_simulation_2D_POMDP_planner(env_right_now, user_defined_rng, m,
 
     # try
         #Start Simulating for t>1
-        while(!is_within_range(location(env_right_now.cart.x,env_right_now.cart.y), env_right_now.cart.goal, 2.0))
+        while(!is_within_range(location(env_right_now.cart.x,env_right_now.cart.y), env_right_now.cart.goal, m.cart_goal_reached_distance_threshold))
             #display_env(env_right_now)
             io = open(filename,"a")
             cart_ran_into_boundary_wall_flag = check_if_cart_collided_with_boundary_wall(env_right_now)
@@ -160,7 +160,7 @@ function run_one_simulation_2D_POMDP_planner(env_right_now, user_defined_rng, m,
                 all_generated_beliefs_using_complete_lidar_data[dict_key] = current_belief_over_complete_cart_lidar_data
                 all_generated_beliefs[dict_key] = current_belief
                 cart_throughout_path[dict_key] = copy(env_right_now.cart)
-                display_env(env_right_now)
+                display_env(env_right_now,"t="*string(time_taken_by_cart))
                 write_and_print( io, "Modified cart state = " * string(env_right_now.cart) )
                 write_and_print( io, "************************************************************************" )
 
@@ -237,12 +237,12 @@ end
 function get_actions_NHV_HJB(m::POMDP_Planner_2D_action_space,b)
     pomdp_state = first(particles(b))
     max_steering_angle = 0.0846204431870001
-    change_in_speed = 0.25
+    change_in_speed = 1.0
     # rollout_steering_angle = clamp(delta_angle, -max_steering_angle, max_steering_angle)
     if(pomdp_state.cart.v == 0.0)
         a = [ POMDP_2D_action_type(-max_steering_angle,change_in_speed,false) , POMDP_2D_action_type(-2/3*max_steering_angle,change_in_speed,false),
             POMDP_2D_action_type(-1/3*max_steering_angle,change_in_speed,false), POMDP_2D_action_type(0.0,change_in_speed,false),
-            POMDP_2D_action_type(0.0,change_in_speed,false), POMDP_2D_action_type(1/3*max_steering_angle,change_in_speed,false),
+            POMDP_2D_action_type(0.0,0.0,false), POMDP_2D_action_type(1/3*max_steering_angle,change_in_speed,false),
             POMDP_2D_action_type(2/3*max_steering_angle,change_in_speed,false), POMDP_2D_action_type(max_steering_angle,change_in_speed,false),
             POMDP_2D_action_type(-10.0,change_in_speed,true) ]
     # elseif (pomdp_state.cart.v == m.max_cart_speed)
@@ -364,7 +364,7 @@ if(run_simulation_flag)
 
     if(create_gif_flag)
         anim = @animate for k ∈ keys(just_2D_pomdp_all_observed_environments)
-            display_env(just_2D_pomdp_all_observed_environments[k]);
+            display_env(just_2D_pomdp_all_observed_environments[k],k);
             #savefig("./plots_just_2d_action_space_pomdp_planner/plot_"*string(i)*".png")
         end
         gif(anim, "just_2D_action_space_pomdp_planner_run.gif", fps = 2)

@@ -1,10 +1,6 @@
 using Plots
 using Random
 
-#Global Variables
-plot_size = 1000; #number of pixels
-cart_size = 1; # radius in meters
-
 #Various different Struct definitions
 struct location
     x::Float64
@@ -213,10 +209,11 @@ function generate_environment_L_shaped_corridor(number_of_humans,user_defined_rn
 end
 
 #Function to display the environment
-function display_env(env::experiment_environment, gif_env_num=nothing)
+function display_env(env::experiment_environment, time_step=nothing, gif_env_num=nothing)
 
     #Plot Boundaries
     # p = plot([0.0],[0.0],legend=false,grid=false)
+    plot_size = 1000; #number of pixels
     p = plot([0.0],[0.0],legend=false,grid=false,axis=([], false))
     plot!([env.length], [env.breadth],legend=false)
 
@@ -320,8 +317,14 @@ function display_env(env::experiment_environment, gif_env_num=nothing)
         end
     end
 
-    annotate!(1.0, 25.0, text("S", :purple, :right, 20))
+    # annotate!(1.0, 25.0, text("S", :purple, :right, 20))
+    # annotate!(env.cart.goal.x, env.cart.goal.y, text("G", :purple, :right, 20))
+    # plot!(size=(plot_size,plot_size))
+    annotate!(env.cart_start_location.x, env.cart_start_location.y, text("S", :purple, :right, 20))
     annotate!(env.cart.goal.x, env.cart.goal.y, text("G", :purple, :right, 20))
+    if(time_step!=nothing)
+        annotate!(env.length/2, env.breadth, text(time_step, :blue, :right, 20))
+    end
     plot!(size=(plot_size,plot_size))
     display(p)
 end

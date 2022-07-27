@@ -219,7 +219,9 @@ function update_cart_position_pomdp_planning_2D_action_space_using_HJB(current_c
         for i in (1:num_time_intervals)
             curent_action_tuple = HJB_action([current_x,current_y,current_theta], HJB_value_function, HJB_actions_list, HJB_obstacle_binary,
                                                                 HJB_env, HJB_vehicle)
-            arc_length = curent_action_tuple[1]
+            if(curent_action_tuple[1] < 0.0)
+                arc_length = curent_action_tuple[1]
+            end
             if(curent_action_tuple[2] == 0.0)
                 new_theta = current_theta
                 new_x = current_x + arc_length*cos(current_theta)*(1/num_time_intervals)
@@ -323,7 +325,7 @@ function POMDPs.gen(m::POMDP_Planner_2D_action_space, s, a, rng)
         new_cart_velocity = clamp(s.cart.v + a.delta_velocity, 0.0, m.max_cart_speed)
         push!(observed_positions, location(-25.0,-25.0))
     elseif( (s.cart.x>m.world.length) || (s.cart.y>m.world.breadth) || (s.cart.x<0.0) || (s.cart.y<0.0) )
-        print("Running into wall")
+        # print("Running into wall")
         new_cart_position = (-100.0, -100.0, -100.0)
         collision_with_obstacle_flag = true
         new_cart_velocity = clamp(s.cart.v + a.delta_velocity, 0.0, m.max_cart_speed)
@@ -517,9 +519,6 @@ function calculate_lower_bound_policy_pomdp_planning_2D_action_space(b)
     delta_angle = 0.0
     d_far_threshold = 6.0
     d_near_threshold = 4.0
-    max_steering_angle = 0.475
-    #This bool is also used to check if all the states in the belief are terminal or not.
-    first_execution_flag = true
     # if(b.depth >= 90)
     #     pomdp_state = first(particles(b))
     #     println(b.depth, " ", pomdp_state.cart)
