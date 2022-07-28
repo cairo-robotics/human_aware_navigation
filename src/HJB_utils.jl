@@ -1,4 +1,4 @@
-function get_HJB_env_vehicle_actions(world, max_vehicle_speed)
+function get_HJB_env_vehicle_actions(world, max_vehicle_speed, max_delta_orientation_angle)
 
     # define workspace
     W = [[0.0 0.0];
@@ -19,9 +19,8 @@ function get_HJB_env_vehicle_actions(world, max_vehicle_speed)
         push!(O_vec, o)
     end
 
-    # max_steering_angle = 0.1
-    max_steering_angle = 0.0846204431870001
     wheelbase = 0.324    # wheelbase [m]
+    max_steering_angle = atan((wheelbase*max_delta_orientation_angle)/max_vehicle_speed)
     vehicle_length = 0.5207      # length [m]
     vehicle_width = 0.2762      # width [m]
     b2a = 0.0889    # rear bumber to rear axle [m]
@@ -66,6 +65,7 @@ end
 #PLOTS
 function plot_HJB_results(HJB_env, HJB_vehicle, start_pose, x_path)
     # plot U as heat map
+    #=
     anim = @animate for k_plot in 1:size(HJB_env.theta_grid,1)
         p_k = heatmap(HJB_env.x_grid, HJB_env.y_grid,
                     transpose(U_HJB[:,:,k_plot]), clim=(0,100),
@@ -113,7 +113,7 @@ function plot_HJB_results(HJB_env, HJB_vehicle, start_pose, x_path)
 
         display(p_k)
     end
-
+    =#
     # plot path
     p_path = plot(aspect_ratio=:equal, size=(1400,1300),
                 xlabel="x-axis [m]", ylabel="y-axis [m]",

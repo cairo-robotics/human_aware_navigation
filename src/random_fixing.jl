@@ -12,6 +12,7 @@ sa = atan(vl*delta_theta/vv)
 
 println("Required steering angle = ", sa, " ", sa*180/pi)
 
+0.0846204431870001
 
 # Fix rollout policy
 # Fix steering angle issue
@@ -50,8 +51,8 @@ curr = deepcopy(start_p)
 num_steps = 0
 while(!is_within_range_check_with_points(curr[1],curr[2], goal[1], goal[2], 2.0) && num_steps<100)
 
-    a = HJB_action(curr, U_HJB, HJB_action_list, O,HJB_env, HJB_vehicle)
-    next_points = update_cart_position_pomdp_planning_2D_action_space_using_HJB(cart_state(curr[1], curr[2],curr[3], a[1], 0.324, location(100.0, 75.0)), a[1], 100.0,100.0, U_HJB, HJB_action_list, O, HJB_env, HJB_vehicle,10)
+    a = HJB_action(curr, U_HJB, HJB_actions, O,HJB_env, HJB_vehicle)
+    next_points = update_cart_position_pomdp_planning_2D_action_space_using_HJB(cart_state(curr[1], curr[2],curr[3], a[1], 0.324, location(100.0, 75.0)), a[1], 100.0,100.0, U_HJB, HJB_actions, O, HJB_env, HJB_vehicle,10)
     for pt in next_points
         push!(x_path_points, pt[1])
         push!(y_path_points, pt[2])

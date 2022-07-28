@@ -210,6 +210,7 @@ function update_cart_position_pomdp_planning_2D_action_space_using_HJB(current_c
                                                                             HJB_env,HJB_vehicle, num_time_intervals = 10)
 
     current_x, current_y, current_theta = current_cart.x, current_cart.y, current_cart.theta
+    # println(current_x, " ", current_y," ",current_theta )
     if(new_cart_speed == 0.0)
         cart_path = Tuple{Float64,Float64,Float64}[ ( Float64(current_x), Float64(current_y), Float64(current_theta) ) ]
         cart_path = repeat(cart_path, num_time_intervals+1)
@@ -234,6 +235,7 @@ function update_cart_position_pomdp_planning_2D_action_space_using_HJB(current_c
             end
             push!(cart_path,(Float64(new_x), Float64(new_y), Float64(new_theta)))
             current_x, current_y,current_theta = new_x,new_y,new_theta
+            # println(curent_action_tuple, " ", current_x, " ", current_y," ",current_theta )
             if(current_x>world_length || current_y>world_breadth || current_x<0.0 || current_y<0.0)
                 for j in i+1:num_time_intervals
                     push!(cart_path,(current_x, current_y, current_theta))
@@ -244,6 +246,7 @@ function update_cart_position_pomdp_planning_2D_action_space_using_HJB(current_c
     end
     return cart_path
 end
+# update_cart_position_pomdp_planning_2D_action_space_using_HJB(cart_state(26.491692934024023, 76.39873468778308, wrap_between_0_and_2Pi(-0.7853981633974478), 0.0, 1.0, location(100.0, 75.0)), 4.0, 100.0,100.0, U_HJB, HJB_action_list, O, HJB_env, HJB_vehicle)
 # @benchmark update_cart_position_pomdp_planning_2D_action_space_using_HJB(cart_state(10.0, 25.0, 0.0, 0.0, 1.0, location(100.0, 75.0)), 4.0, 100.0,100.0, U_HJB, HJB_action_list, O, HJB_env, HJB_vehicle)
 # @code_warntype update_cart_position_pomdp_planning_2D_action_space_using_HJB(cart_state(10.0, 25.0, 0.0, 0.0, 1.0, location(100.0, 75.0)), 4.0, 100.0,100.0, U_HJB, HJB_action_list, O, HJB_env, HJB_vehicle)
 

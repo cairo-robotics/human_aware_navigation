@@ -236,7 +236,7 @@ end
 
 function get_actions_NHV_HJB(m::POMDP_Planner_2D_action_space,b)
     pomdp_state = first(particles(b))
-    max_steering_angle = 0.0846204431870001
+    max_steering_angle = 0.06353163608639502
     change_in_speed = 1.0
     # rollout_steering_angle = clamp(delta_angle, -max_steering_angle, max_steering_angle)
     if(pomdp_state.cart.v == 0.0)
@@ -313,6 +313,7 @@ if(run_simulation_flag)
     rand_noise_generator_for_solver = MersenneTwister(rand_noise_generator_seed_for_solver)
 
     max_vehicle_speed = 4.0
+    max_delta_orientation_angle = pi/4
     HJB_planning_time_step = 0.1
     max_plan_steps = 2e4
 
@@ -320,7 +321,7 @@ if(run_simulation_flag)
     env = generate_environment_small_circular_obstacles(300, rand_noise_generator_for_env)
     # env = generate_environment_large_circular_obstacles(300, rand_noise_generator_for_env)
     env_right_now = deepcopy(env)
-    HJB_env, HJB_vehicle, HJB_action_list = get_HJB_env_vehicle_actions(env,max_vehicle_speed)
+    HJB_env, HJB_vehicle, HJB_action_list = get_HJB_env_vehicle_actions(env,max_vehicle_speed,max_delta_orientation_angle)
     U_HJB,T,O = get_HJB_value_function(HJB_env,HJB_vehicle,HJB_action_list,run_HJB_flag)
     start_pose = [env.cart.x, env.cart.y, env.cart.theta]
     x_path, u_path, num_steps = HJB_planner(start_pose, U_HJB, HJB_planning_time_step, max_plan_steps, HJB_action_list, O, HJB_env, HJB_vehicle)
