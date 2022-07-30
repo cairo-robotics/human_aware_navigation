@@ -109,7 +109,7 @@ function run_one_simulation_2D_POMDP_planner(env_right_now, user_defined_rng, m,
                         a = POMDP_2D_action_type(-10.0,-10.0,false)
                     end
                 end
-                write_and_print( io, "Action chosen by 2D action space POMDP planner: " * string((a.steering_angle, a.delta_velocity)) )
+                write_and_print( io, "Action chosen by 2D action space POMDP planner: " * string((a.delta_angle, a.delta_velocity)) )
                 dict_key = "t="*string(time_taken_by_cart)
                 all_generated_trees[dict_key] = deepcopy(info)
                 # all_generated_trees[dict_key] = nothing
@@ -122,8 +122,8 @@ function run_one_simulation_2D_POMDP_planner(env_right_now, user_defined_rng, m,
 
                 if(env_right_now.cart.v != 0.0)
                     #That means the cart is not stationary and we now have to simulate both cart and the pedestrians.
-                    # steering_angle = atan((env_right_now.cart.L*a[1])/env_right_now.cart.v)
-                    steering_angle = a.steering_angle
+                    steering_angle = atan((env_right_now.cart.L*a.delta_angle)/env_right_now.cart.v)
+                    # steering_angle = a.steering_angle
                     if(a.HJB_path_flag != true)
                         current_belief_over_complete_cart_lidar_data, risks_in_simulation = simulate_cart_and_pedestrians_and_generate_gif_environments_when_cart_moving(
                                                                         env_right_now,current_belief_over_complete_cart_lidar_data, all_gif_environments,
@@ -234,29 +234,6 @@ function get_actions_holonomic_fmm(m::POMDP_Planner_2D_action_space,b)
     return a
 end
 
-function get_actions_NHV_HJB(m::POMDP_Planner_2D_action_space,b)
-    pomdp_state = first(particles(b))
-    max_steering_angle = 0.06353163608639502
-    change_in_speed = 1.0
-    # rollout_steering_angle = clamp(delta_angle, -max_steering_angle, max_steering_angle)
-    if(pomdp_state.cart.v == 0.0)
-        a = [ POMDP_2D_action_type(-max_steering_angle,change_in_speed,false) , POMDP_2D_action_type(-2/3*max_steering_angle,change_in_speed,false),
-            POMDP_2D_action_type(-1/3*max_steering_angle,change_in_speed,false), POMDP_2D_action_type(0.0,change_in_speed,false),
-            POMDP_2D_action_type(0.0,0.0,false), POMDP_2D_action_type(1/3*max_steering_angle,change_in_speed,false),
-            POMDP_2D_action_type(2/3*max_steering_angle,change_in_speed,false), POMDP_2D_action_type(max_steering_angle,change_in_speed,false),
-            POMDP_2D_action_type(-10.0,change_in_speed,true) ]
-    # elseif (pomdp_state.cart.v == m.max_cart_speed)
-    else
-        a = [ POMDP_2D_action_type(-max_steering_angle,0.0,false) , POMDP_2D_action_type(-2/3*max_steering_angle,0.0,false),
-            POMDP_2D_action_type(-1/3*max_steering_angle,0.0,false), POMDP_2D_action_type(0.0,-change_in_speed,false),
-            POMDP_2D_action_type(0.0,0.0,false),POMDP_2D_action_type(0.0,change_in_speed,false),
-            POMDP_2D_action_type(1/3*max_steering_angle,0.0,false),POMDP_2D_action_type(2/3*max_steering_angle,0.0,false),
-            POMDP_2D_action_type(max_steering_angle,0.0,false), POMDP_2D_action_type(-10.0,0.0,true),
-            POMDP_2D_action_type(-10.0,-10.0,false)]
-    end
-    return a
-end
-
 function get_actions_non_holonomic(b)
     pomdp_state = first(particles(b))
     required_orientation = get_heading_angle( pomdp_state.cart.goal.x, pomdp_state.cart.goal.y, pomdp_state.cart.x, pomdp_state.cart.y)
@@ -293,6 +270,29 @@ function get_actions_non_holonomic(b)
 end
 #@code_warntype get_available_actions(POMDP_state_2D_action_space(env.cart,env.humans))
 
+function get_actions_NHV_HJB(m::POMDP_Planner_2D_action_space,b)
+    pomdp_state = first(particles(b))
+    max_delta_angle = pi/4
+    change_in_speed = 1.0
+    # rollout_steering_angle = clamp(delta_angle, -max_steering_angle, max_steering_angle)
+    if(pomdp_state.cart.v == 0.0)
+        a = [ POMDP_2D_action_type(-max_delta_angle,change_in_speed,false) , POMDP_2D_action_type(-2/3*max_delta_angle,change_in_speed,false),
+            POMDP_2D_action_type(-1/3*max_delta_angle,change_in_speed,false), POMDP_2D_action_type(0.0,change_in_speed,false),
+            POMDP_2D_action_type(0.0,0.0,false), POMDP_2D_action_type(1/3*max_delta_angle,change_in_speed,false),
+            POMDP_2D_action_type(2/3*max_delta_angle,change_in_speed,false), POMDP_2D_action_type(max_delta_angle,change_in_speed,false),
+            POMDP_2D_action_type(-10.0,change_in_speed,true) ]
+    # elseif (pomdp_state.cart.v == m.max_cart_speed)
+    else
+        a = [ POMDP_2D_action_type(-max_delta_angle,0.0,false) , POMDP_2D_action_type(-2/3*max_delta_angle,0.0,false),
+            POMDP_2D_action_type(-1/3*max_delta_angle,0.0,false), POMDP_2D_action_type(0.0,-change_in_speed,false),
+            POMDP_2D_action_type(0.0,0.0,false),POMDP_2D_action_type(0.0,change_in_speed,false),
+            POMDP_2D_action_type(1/3*max_delta_angle,0.0,false),POMDP_2D_action_type(2/3*max_delta_angle,0.0,false),
+            POMDP_2D_action_type(max_delta_angle,0.0,false), POMDP_2D_action_type(-10.0,0.0,true),
+            POMDP_2D_action_type(-10.0,-10.0,false)]
+    end
+    return a
+end
+
 gr()
 run_simulation_flag = true
 write_to_file_flag = false
@@ -318,7 +318,7 @@ if(run_simulation_flag)
     max_plan_steps = 2e4
 
     # env = generate_environment_no_obstacles(300, rand_noise_generator_for_env)
-    env = generate_environment_small_circular_obstacles(300, rand_noise_generator_for_env)
+    env = generate_environment_small_circular_obstacles(200, rand_noise_generator_for_env)
     # env = generate_environment_large_circular_obstacles(300, rand_noise_generator_for_env)
     env_right_now = deepcopy(env)
     HJB_env, HJB_vehicle, HJB_action_list = get_HJB_env_vehicle_actions(env,max_vehicle_speed,max_delta_orientation_angle)

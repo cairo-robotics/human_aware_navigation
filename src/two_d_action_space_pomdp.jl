@@ -22,7 +22,7 @@ end
 
 #Define POMDP Action Struct
 struct POMDP_2D_action_type
-    steering_angle::Float64
+    delta_angle::Float64
     delta_velocity::Float64
     HJB_path_flag::Bool
 end
@@ -165,7 +165,7 @@ end
 #************************************************************************************************
 #Simulating the cart one step forward in POMDP planning according to its new speed
 
-function update_cart_position_pomdp_planning_2D_action_space(current_cart, steering_angle, new_cart_speed, world_length, world_breadth,
+function update_cart_position_pomdp_planning_2D_action_space(current_cart, delta_angle, new_cart_speed, world_length, world_breadth,
                                                                                             goal_distance_threshold, num_time_intervals = 10)
     current_x, current_y, current_theta = current_cart.x, current_cart.y, current_cart.theta
     if(new_cart_speed == 0.0)
@@ -175,7 +175,7 @@ function update_cart_position_pomdp_planning_2D_action_space(current_cart, steer
         cart_path = Tuple{Float64,Float64,Float64}[(current_x, current_y, current_theta)]
         # push!(cart_path,(Float64(current_x), Float64(current_y), Float64(current_theta)))
         arc_length = new_cart_speed
-        # steering_angle = atan((current_cart.L*delta_angle)/arc_length)
+        steering_angle = atan((current_cart.L*delta_angle)/arc_length)
         # println("sa ", steering_angle)
         for i in (1:num_time_intervals)
             if(steering_angle == 0.0)
@@ -348,7 +348,7 @@ function POMDPs.gen(m::POMDP_Planner_2D_action_space, s, a, rng)
                                                                                         m.world.breadth, m.HJB_value_function, m.HJB_actions,m.HJB_obstacle_binary,
                                                                                         m.HJB_env,m.HJB_vehicle, num_time_intervals)
         else
-            cart_path::Vector{Tuple{Float64,Float64,Float64}} = update_cart_position_pomdp_planning_2D_action_space(s.cart, a.steering_angle, new_cart_velocity, m.world.length,
+            cart_path::Vector{Tuple{Float64,Float64,Float64}} = update_cart_position_pomdp_planning_2D_action_space(s.cart, a.delta_angle, new_cart_velocity, m.world.length,
                                                                                         m.world.breadth, m.cart_goal_reached_distance_threshold, num_time_intervals)
         end
         new_cart_position = cart_path[end]

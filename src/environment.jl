@@ -256,7 +256,7 @@ function display_env(env::experiment_environment, time_step=nothing, gif_env_num
     end
 
     #Plot Golfcart
-    scatter!([env.cart.x], [env.cart.y], shape=:circle, color="blue", msize= 0.3*plot_size*cart_size/env.length)
+    scatter!([env.cart.x], [env.cart.y], shape=:circle, color="blue", msize= 0.3*plot_size*env.cart.L/env.length)
     quiver!([env.cart.x],[env.cart.y],quiver=([cos(env.cart.theta)],[sin(env.cart.theta)]), color="blue")
 
     #Plot the Hybrid A* path if it exists
