@@ -322,7 +322,7 @@ function POMDPs.gen(m::POMDP_Planner_2D_action_space, s, a, rng)
     observed_positions = location[]
 
     if(is_within_range_check_with_points(s.cart.x,s.cart.y, s.cart.goal.x, s.cart.goal.y, m.cart_goal_reached_distance_threshold))
-        println("Goal reached")
+        # println("Goal reached")
         new_cart_position = (-100.0, -100.0, -100.0)
         cart_reached_goal_flag = true
         new_cart_velocity = clamp(s.cart.v + a.delta_velocity, 0.0, m.max_cart_speed)
