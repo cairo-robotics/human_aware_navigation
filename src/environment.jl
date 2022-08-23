@@ -56,18 +56,18 @@ end
 #Define the Environment
 function generate_environment_no_obstacles(number_of_humans, user_defined_rng)
 
-    world_length = 100.0
-    world_breadth = 100.0
+    world_length =  5.518
+    world_breadth = 11.036
     g1 = location(0.0,0.0)
     g2 = location(0.0,world_breadth)
     g3 = location(world_length,world_breadth)
     g4 = location(world_length,0.0)
-    cart_goal = location(world_length,75.0)
+    cart_goal = location(2.75,world_breadth)
     all_goals_list = [g1,g2,g3,g4]
     all_obstacle_list = obstacle_location[]
     max_num_humans = number_of_humans
 
-    golfcart = cart_state(1.0,25.0,0.0,0.0,1.0,cart_goal)
+    golfcart = cart_state(2.75,0.5,0.0,0.0,0.3,cart_goal)
     initial_cart_lidar_data = Array{human_state,1}()
     initial_complete_cart_lidar_data = Array{human_state,1}()
 
@@ -180,8 +180,8 @@ end
 function display_env(env::experiment_environment, gif_env_num=nothing)
 
     #Plot Boundaries
-    # p = plot([0.0],[0.0],legend=false,grid=false)
-    p = plot([0.0],[0.0],legend=false,grid=false,axis=([], false))
+    p = plot([0.0],[0.0],legend=false,grid=false)
+    # p = plot([0.0],[0.0],legend=false,grid=false,axis=([], false))
     plot!([env.length], [env.breadth],legend=false)
 
     #Plot Humans in the cart lidar data
