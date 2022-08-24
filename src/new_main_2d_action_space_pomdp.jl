@@ -78,7 +78,7 @@ function run_one_simulation_2D_POMDP_planner(env_right_now, user_defined_rng, m,
 
     # try
         #Start Simulating for t>1
-        while(!is_within_range(location(env_right_now.cart.x,env_right_now.cart.y), env_right_now.cart.goal, 1.0))
+        while(!is_within_range(location(env_right_now.cart.x,env_right_now.cart.y), env_right_now.cart.goal, 0.5))
             #display_env(env_right_now)
             io = open(filename,"a")
             cart_ran_into_boundary_wall_flag = check_if_cart_collided_with_boundary_wall(env_right_now)
@@ -258,9 +258,7 @@ if(run_simulation_flag)
     rand_noise_generator_for_solver = MersenneTwister(rand_noise_generator_seed_for_solver)
 
 
-    env = generate_environment_no_obstacles(4, rand_noise_generator_for_env)
-    # env = generate_environment_small_circular_obstacles(300, rand_noise_generator_for_env)
-    # env = generate_environment_large_circular_obstacles(300, rand_noise_generator_for_env)
+    env = generate_ASPEN_environment_no_obstacles(10, rand_noise_generator_for_env)
     env_right_now = deepcopy(env)
 
     filename = "output_just_2d_action_space_pomdp_planner.txt"
@@ -273,7 +271,7 @@ if(run_simulation_flag)
     # discount_factor::Float64; pedestrian_distance_threshold::Float64; pedestrian_collision_penalty::Float64;
     # obstacle_distance_threshold::Float64; obstacle_collision_penalty::Float64; goal_reward_distance_threshold::Float64;
     # cart_goal_reached_distance_threshold::Float64; goal_reward::Float64; max_cart_speed::Float64; world::experiment_environment
-    golfcart_2D_action_space_pomdp = POMDP_Planner_2D_action_space(0.97,1.0,-100.0,2.0,-100.0,0.0,1.0,1000.0,4.0,env_right_now)
+    golfcart_2D_action_space_pomdp = POMDP_Planner_2D_action_space(0.97,0.5,-100.0,2.0,-100.0,0.0,1.0,1000.0,4.0,env_right_now)
     discount(p::POMDP_Planner_2D_action_space) = p.discount_factor
     isterminal(::POMDP_Planner_2D_action_space, s::POMDP_state_2D_action_space) = is_terminal_state_pomdp_planning(s,location(-100.0,-100.0));
     #actions(::POMDP_Planner_2D_action_space) = [(-pi/4,0.0),(-pi/6,0.0),(-pi/12,0.0),(0.0,-1.0),(0.0,0.0),(0.0,1.0),(pi/12,0.0),(pi/6,0.0),(pi/4,0.0)]

@@ -432,20 +432,21 @@ function respawn_humans(world, user_defined_rng_for_env)
 
     total_number_of_humans = length(world.humans)
     num_humans_to_be_respawned = num_humans_already_at_goal - total_humans_respawned_so_far
+    distance_threshold = 1.0
 
     while(num_humans_to_be_respawned!=0)
-
+        println("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Respawning Humans in the simulator ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
         rand_num = rand(user_defined_rng_for_env)
         rand_num_to_choose_side = floor(4*rand_num)
 
         #rand_num_to_choose_side == 0 represents the left edge of the square
         if( rand_num_to_choose_side == 0.0 )
             new_human_x = 0.0
-            new_human_y = floor(100*rand_num)
+            new_human_y = floor(world.breadth*rand_num)
             while(is_within_range_check_with_points(new_human_x,new_human_y,world.cart_start_location.x,
-                        world.cart_start_location.y,15.0) && is_within_range_check_with_points(new_human_x,new_human_y,
-                        world.cart.goal.x,world.cart.goal.y,15.0) )
-                new_human_y = floor(100*rand(user_defined_rng_for_env))
+                        world.cart_start_location.y,distance_threshold) && is_within_range_check_with_points(new_human_x,new_human_y,
+                        world.cart.goal.x,world.cart.goal.y,distance_threshold) )
+                new_human_y = floor(world.breadth*rand(user_defined_rng_for_env))
             end
             #Possible Goal locations for this human are G3(100,100) and G4(100,0)
             new_human_goal = world.goals[Int(ceil(rand(user_defined_rng_for_env)*2) + 2)]
@@ -453,12 +454,12 @@ function respawn_humans(world, user_defined_rng_for_env)
             total_number_of_humans += 1
         #rand_num_to_choose_side == 1 represents the top edge of the square
         elseif( rand_num_to_choose_side == 1.0 )
-            new_human_y = 100.0
-            new_human_x = floor(100*rand_num)
+            new_human_y = world.breadth
+            new_human_x = floor(world.length*rand_num)
             while(is_within_range_check_with_points(new_human_x,new_human_y,world.cart_start_location.x,
-                        world.cart_start_location.y,15.0) || is_within_range_check_with_points(new_human_x,new_human_y,
-                        world.cart.goal.x,world.cart.goal.y,15.0) )
-                new_human_x = floor(100*rand(user_defined_rng_for_env))
+                        world.cart_start_location.y,distance_threshold) || is_within_range_check_with_points(new_human_x,new_human_y,
+                        world.cart.goal.x,world.cart.goal.y,distance_threshold) )
+                new_human_x = floor(world.length*rand(user_defined_rng_for_env))
             end
             #Possible Goal locations for this human are G1(0,0) and G4(100,0)
             if( rand(user_defined_rng_for_env) > 0.5)
@@ -470,12 +471,12 @@ function respawn_humans(world, user_defined_rng_for_env)
             total_number_of_humans += 1
         #rand_num_to_choose_side == 2 represents the right edge of the square
         elseif( rand_num_to_choose_side == 2.0 )
-            new_human_x = 100.0
-            new_human_y = floor(100*rand_num)
+            new_human_x = world.length
+            new_human_y = floor(world.breadth*rand_num)
             while(is_within_range_check_with_points(new_human_x,new_human_y,world.cart_start_location.x,
-                        world.cart_start_location.y,15.0) || is_within_range_check_with_points(new_human_x,new_human_y,
-                        world.cart.goal.x,world.cart.goal.y,15.0) )
-                new_human_y = floor(100*rand(user_defined_rng_for_env))
+                        world.cart_start_location.y,distance_threshold) || is_within_range_check_with_points(new_human_x,new_human_y,
+                        world.cart.goal.x,world.cart.goal.y,distance_threshold) )
+                new_human_y = floor(world.breadth*rand(user_defined_rng_for_env))
             end
             #Possible Goal locations for this human are G1(0,0) and G2(0,100)
             new_human_goal = world.goals[Int(ceil(rand(user_defined_rng_for_env)*2))]
@@ -484,11 +485,11 @@ function respawn_humans(world, user_defined_rng_for_env)
         #rand_num_to_choose_side == 3 represents the bottom edge of the square
         elseif( rand_num_to_choose_side == 3.0 )
             new_human_y = 0.0
-            new_human_x = floor(100*rand_num)
+            new_human_x = floor(world.length*rand_num)
             while(is_within_range_check_with_points(new_human_x,new_human_y,world.cart_start_location.x,
-                        world.cart_start_location.y,15.0) || is_within_range_check_with_points(new_human_x,new_human_y,
-                        world.cart.goal.x,world.cart.goal.y,15.0) )
-                new_human_x = floor(100*rand(user_defined_rng_for_env))
+                        world.cart_start_location.y,distance_threshold) || is_within_range_check_with_points(new_human_x,new_human_y,
+                        world.cart.goal.x,world.cart.goal.y,distance_threshold) )
+                new_human_x = floor(world.length*rand(user_defined_rng_for_env))
             end
             #Possible Goal locations for this human are G2(0,100) and G3(100,100)
             new_human_goal = world.goals[Int(ceil(rand(user_defined_rng_for_env)*2) + 1)]
