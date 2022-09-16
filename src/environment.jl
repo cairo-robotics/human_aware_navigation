@@ -49,6 +49,12 @@ mutable struct experiment_environment
     cart_start_location::location
 end
 
+function circleShape(h,k,r)
+    theta = LinRange(0,2*pi,500)
+    h .+ r*sin.(theta), k .+ r*cos.(theta)
+end
+
+
 #Define the Environment
 function generate_ASPEN_environment_no_obstacles(number_of_humans, user_defined_rng)
 
@@ -85,16 +91,22 @@ function generate_ASPEN_environment_no_obstacles(number_of_humans, user_defined_
     return world
 end
 
-
 #Function to display the environment
-function display_env(env::experiment_environment, gif_env_num=nothing)
+function display_env(env::experiment_environment, time_index=nothing, gif_env_num=nothing)
 
     plot_size = 1000; #number of pixels
     cart_size = 1; # radius in meters
+
     #Plot Boundaries
-    p = plot([0.0],[0.0],legend=false,grid=false)
-    # p = plot([0.0],[0.0],legend=false,grid=false,axis=([], false))
-    plot!([env.length], [env.breadth],legend=false)
+    # p = plot([0.0],[0.0],legend=false,grid=false)
+    p = plot([0.0],[0.0],legend=false,grid=false,axis=([], false))
+    # plot!([env.length], [env.breadth],legend=false)
+
+    #Plot the rectangular environment
+    plot!([0.0, env.length],[0.0,0.0], color="grey", lw=2)
+    plot!([env.length, env.length],[0.0,env.breadth], color="grey", lw=2)
+    plot!([0.0, env.length],[env.breadth,env.breadth], color="grey", lw=2)
+    plot!([0.0, 0.0],[0.0,env.breadth], color="grey", lw=2)
 
     #Plot Humans in the cart lidar data
     for i in 1: length(env.cart_lidar_data)
@@ -115,7 +127,7 @@ function display_env(env::experiment_environment, gif_env_num=nothing)
         end
     end
 
-    # #Plot Rest of the Humans
+    #Plot Rest of the Humans
     # for i in 1: length(env.humans)
     #     in_lidar_data_flag = false
     #     for green_human in env.cart_lidar_data
@@ -196,8 +208,14 @@ function display_env(env::experiment_environment, gif_env_num=nothing)
         end
     end
 
-    annotate!(1.0, 25.0, text("S", :purple, :right, 20))
+    #annotate!(1.0, 25.0, text("S", :purple, :right, 20))
     annotate!(env.cart.goal.x, env.cart.goal.y, text("G", :purple, :right, 20))
+    # scatter!([env.cart.goal.x], [env.cart.goal.y],color="purple",shape=:circle,msize=20, opacity=0.5)
+    plot!(circleShape(env.cart.goal.x, env.cart.goal.y,GLOBAL_RADIUS_AROUND_GOAL), lw=0.5, linecolor = :black, legend=false, fillalpha=0.2, aspect_ratio=1,c= :blue, seriestype = [:shape,])
+    # plot!(circleShape(env.cart.goal.x, env.cart.goal.y,GLOBAL_RADIUS_AROUND_GOAL), lw=0.5, linecolor = :black, legend=false, fillalpha=0.2, c= :blue, seriestype = [:shape,])
+    if(time_index != nothing)
+        annotate!(env.cart.goal.x+0.5, env.breadth+1, text(string(time_index), :purple, :right, 20))
+    end
     plot!(size=(plot_size,plot_size))
     display(p)
 end
