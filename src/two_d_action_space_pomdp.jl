@@ -153,7 +153,7 @@ end
 #Simulating the cart one step forward in POMDP planning according to its new speed
 
 function update_cart_position_pomdp_planning_2D_action_space(current_cart, delta_angle, new_cart_speed, world_length, world_breadth,
-                                                                                            goal_distance_threshold, num_time_intervals = 10)
+                                                                        goal_distance_threshold, one_time_step, num_time_intervals = 10)
     current_x, current_y, current_theta = current_cart.x, current_cart.y, current_cart.theta
     if(new_cart_speed == 0.0)
         cart_path = Tuple{Float64,Float64,Float64}[ ( Float64(current_x), Float64(current_y), Float64(current_theta) ) ]
@@ -161,15 +161,15 @@ function update_cart_position_pomdp_planning_2D_action_space(current_cart, delta
     else
         cart_path = Tuple{Float64,Float64,Float64}[]
         push!(cart_path,(Float64(current_x), Float64(current_y), Float64(current_theta)))
-        arc_length = new_cart_speed
+        arc_length = new_cart_speed * one_time_step
         steering_angle = atan((current_cart.L*delta_angle)/arc_length)
         for i in (1:num_time_intervals)
             if(steering_angle == 0.0)
                 new_theta = current_theta
-                new_x = current_x + arc_length*cos(current_theta)*(1/num_time_intervals)
-                new_y = current_y + arc_length*sin(current_theta)*(1/num_time_intervals)
+                new_x = current_x + new_cart_speed*cos(current_theta)*(one_time_step/num_time_intervals)
+                new_y = current_y + new_cart_speed*sin(current_theta)*(one_time_step/num_time_intervals)
             else
-                new_theta = current_theta + (arc_length * tan(steering_angle) * (1/num_time_intervals) / current_cart.L)
+                new_theta = current_theta + (new_cart_speed * tan(steering_angle) * (one_time_step/num_time_intervals) / current_cart.L)
                 new_theta = wrap_between_0_and_2Pi(new_theta)
                 new_x = current_x + ((current_cart.L / tan(steering_angle)) * (sin(new_theta) - sin(current_theta)))
                 new_y = current_y + ((current_cart.L / tan(steering_angle)) * (cos(current_theta) - cos(new_theta)))
@@ -244,6 +244,15 @@ function immediate_stop_penalty_pomdp_planning_2D_action_space(immediate_stop_fl
     end
 end
 
+function unnecessary_angle_change_penalty(a)
+    if(a[1] != 0.0)
+        return -1.0
+    else
+        return 0.0
+    end
+end
+
+
 
 #************************************************************************************************
 #POMDP Generative Model
@@ -284,7 +293,7 @@ function POMDPs.gen(m::POMDP_Planner_2D_action_space, s, a, rng)
         new_cart_velocity = clamp(s.cart.v + a[2], 0.0, m.max_cart_speed)
         num_time_intervals = 5
         cart_path::Vector{Tuple{Float64,Float64,Float64}} = update_cart_position_pomdp_planning_2D_action_space(s.cart, a[1], new_cart_velocity, m.world.length,
-                                                                                        m.world.breadth, m.cart_goal_reached_distance_threshold, num_time_intervals)
+                                                                                        m.world.breadth,m.cart_goal_reached_distance_threshold,one_time_step,num_time_intervals)
         new_cart_position = cart_path[end]
         #If cart goes out of bounds by taking this action
         if( (new_cart_position[1]>m.world.length) || (new_cart_position[2]>m.world.breadth) || (new_cart_position[1]<0.0) || (new_cart_position[2]<0.0) )
@@ -392,6 +401,8 @@ function POMDPs.gen(m::POMDP_Planner_2D_action_space, s, a, rng)
     #Penalize if had to apply sudden brakes
     r += immediate_stop_penalty_pomdp_planning_2D_action_space(immediate_stop_flag, m.pedestrian_collision_penalty)
     #println("Reward if you had to apply immediate brakes", r)
+    #Penalize if vehicle's orientation is changed
+    r += unnecessary_angle_change_penalty(a)
     #Penalty for longer duration paths
     r -= 1.0
 
