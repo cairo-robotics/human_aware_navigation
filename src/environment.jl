@@ -50,7 +50,7 @@ mutable struct experiment_environment
 end
 
 function circleShape(h,k,r)
-    theta = LinRange(0,2*pi,500)
+    theta = LinRange(0,2*pi,100)
     h .+ r*sin.(theta), k .+ r*cos.(theta)
 end
 
@@ -95,7 +95,7 @@ end
 function display_env(env::experiment_environment, time_index=nothing, gif_env_num=nothing)
 
     plot_size = 1000; #number of pixels
-    cart_size = 1; # radius in meters
+    PADDING_AROUND_HUMAN = 0.2
 
     #Plot Boundaries
     # p = plot([0.0],[0.0],legend=false,grid=false)
@@ -110,7 +110,10 @@ function display_env(env::experiment_environment, time_index=nothing, gif_env_nu
 
     #Plot Humans in the cart lidar data
     for i in 1: length(env.cart_lidar_data)
-        scatter!([env.cart_lidar_data[i].x], [env.cart_lidar_data[i].y],color="green",msize=0.1*plot_size/env.length)
+        # scatter!([env.cart_lidar_data[i].x], [env.cart_lidar_data[i].y],color="green",msize=0.1*plot_size/env.length)
+        scatter!([env.cart_lidar_data[i].x], [env.cart_lidar_data[i].y],color="red")
+        plot!(circleShape(env.cart_lidar_data[i].x, env.cart_lidar_data[i].y,PADDING_AROUND_HUMAN), lw=0.5, linecolor = :black,
+                                                                legend=false, fillalpha=0.2, aspect_ratio=1,c= :red, seriestype = [:shape,])
     end
 
     #Plot humans from cart_lidar_data
@@ -123,7 +126,9 @@ function display_env(env::experiment_environment, time_index=nothing, gif_env_nu
             end
         end
         if(!in_lidar_data_flag)
-            scatter!([env.complete_cart_lidar_data[i].x], [env.complete_cart_lidar_data[i].y],color="red",msize=0.1*plot_size/env.length)
+            scatter!([env.complete_cart_lidar_data[i].x], [env.complete_cart_lidar_data[i].y],color="blue")
+            plot!(circleShape(env.complete_cart_lidar_data[i].x, env.complete_cart_lidar_data[i].y,PADDING_AROUND_HUMAN), lw=0.5, linecolor = :black,
+                                                                legend=false, fillalpha=0.2, aspect_ratio=1,c= :blue, seriestype = [:shape,])
         end
     end
 
@@ -147,8 +152,10 @@ function display_env(env::experiment_environment, time_index=nothing, gif_env_nu
     end
 
     #Plot Golfcart
-    scatter!([env.cart.x], [env.cart.y], shape=:circle, color="blue", msize= 0.07*plot_size*cart_size/env.length)
-    quiver!([env.cart.x],[env.cart.y],quiver=([cos(env.cart.theta)],[sin(env.cart.theta)]), color="blue")
+    scatter!([env.cart.x], [env.cart.y], shape=:circle, color="grey")
+    plot!(circleShape(env.cart.x, env.cart.y,env.cart.L), lw=0.5, linecolor = :black,
+                                                        legend=false, fillalpha=0.2, aspect_ratio=1,c= :grey, seriestype = [:shape,])
+    quiver!([env.cart.x],[env.cart.y],quiver=([cos(env.cart.theta)],[sin(env.cart.theta)]), color="grey")
 
     #Plot the Hybrid A* path if it exists
     if(length(env.cart_hybrid_astar_path)!=0)
@@ -209,9 +216,9 @@ function display_env(env::experiment_environment, time_index=nothing, gif_env_nu
     end
 
     #annotate!(1.0, 25.0, text("S", :purple, :right, 20))
-    annotate!(env.cart.goal.x, env.cart.goal.y, text("G", :purple, :right, 20))
+    annotate!(env.cart.goal.x, env.cart.goal.y, text("G", :darkgreen, :right, 20))
     # scatter!([env.cart.goal.x], [env.cart.goal.y],color="purple",shape=:circle,msize=20, opacity=0.5)
-    plot!(circleShape(env.cart.goal.x, env.cart.goal.y,GLOBAL_RADIUS_AROUND_GOAL), lw=0.5, linecolor = :black, legend=false, fillalpha=0.2, aspect_ratio=1,c= :blue, seriestype = [:shape,])
+    plot!(circleShape(env.cart.goal.x, env.cart.goal.y,GLOBAL_RADIUS_AROUND_GOAL), lw=0.5, linecolor = :black, legend=false, fillalpha=0.2, aspect_ratio=1,c= :darkgreen, seriestype = [:shape,])
     # plot!(circleShape(env.cart.goal.x, env.cart.goal.y,GLOBAL_RADIUS_AROUND_GOAL), lw=0.5, linecolor = :black, legend=false, fillalpha=0.2, c= :blue, seriestype = [:shape,])
     if(time_index != nothing)
         annotate!(env.cart.goal.x+0.5, env.breadth+1, text(string(time_index), :purple, :right, 20))
