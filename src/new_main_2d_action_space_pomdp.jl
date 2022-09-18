@@ -12,14 +12,14 @@ Base.copy(s::cart_state) = cart_state(s.x, s.y,s.theta,s.v,s.L,s.goal)
 
 #Define some global variables
 GLOBAL_RADIUS_AROUND_GOAL = 1.0
-GLOBAL_TIME_STEP = 1.0
+GLOBAL_TIME_STEP = 0.5
 
 function run_one_simulation_2D_POMDP_planner(env_right_now, user_defined_rng, m,
                             planner, filename = "output_just_2d_action_space_pomdp_planner.txt")
 
     time_taken_by_cart = 0
     number_risks = 0
-    one_time_step = 0.5
+    one_time_step = GLOBAL_TIME_STEP
     lidar_range = 30
     num_humans_to_care_about_while_pomdp_planning = 6
     cone_half_angle::Float64 = (2/3)*pi
@@ -37,7 +37,7 @@ function run_one_simulation_2D_POMDP_planner(env_right_now, user_defined_rng, m,
     all_risky_scenarios = OrderedDict()
     all_actions = OrderedDict()
     all_planners = OrderedDict()
-    MAX_TIME_LIMIT = 300
+    MAX_TIME_LIMIT = 20
 
     #Sense humans near cart before moving
     #Generate Initial Lidar Data and Belief for humans near cart
@@ -60,18 +60,18 @@ function run_one_simulation_2D_POMDP_planner(env_right_now, user_defined_rng, m,
 
     #Simulate for t=0 to t=1
     io = open(filename,"w")
-    write_and_print( io, "Simulating for time interval - (" * string(time_taken_by_cart) * " , " * string(time_taken_by_cart+1) * ")" )
+    write_and_print( io, "Simulating for time interval - (" * string(time_taken_by_cart) * " , " * string(time_taken_by_cart+one_time_step) * ")" )
     write_and_print( io, "Current cart state = " * string(env_right_now.cart) )
 
     #Update human positions in environment for two time steps and cart's belief accordingly
-    current_belief_over_complete_cart_lidar_data, risks_in_simulation = simulate_pedestrians_and_generate_gif_environments_when_cart_stationary(env_right_now,
+    current_belief_over_complete_cart_lidar_data, risks_in_simulation = simulate_cart_and_pedestrians_and_generate_gif_environments(env_right_now,
                                                         initial_belief_over_complete_cart_lidar_data,all_gif_environments, all_risky_scenarios, time_taken_by_cart,
                                                         num_humans_to_care_about_while_pomdp_planning,cone_half_angle, lidar_range, m.pedestrian_distance_threshold,
-                                                        user_defined_rng )
+                                                        user_defined_rng, one_time_step, 0.0)
     current_belief =  get_belief_for_selected_humans_from_belief_over_complete_lidar_data(current_belief_over_complete_cart_lidar_data,
                                                             env_right_now.complete_cart_lidar_data, env_right_now.cart_lidar_data)
     number_risks += risks_in_simulation
-    time_taken_by_cart += 1
+    time_taken_by_cart += one_time_step
     dict_key = "t="*string(time_taken_by_cart)
     all_observed_environments[dict_key] = deepcopy(env_right_now)
     all_generated_beliefs_using_complete_lidar_data[dict_key] = current_belief_over_complete_cart_lidar_data
@@ -89,7 +89,7 @@ function run_one_simulation_2D_POMDP_planner(env_right_now, user_defined_rng, m,
             cart_ran_into_static_obstacle_flag = check_if_cart_collided_with_static_obstacles(env_right_now)
             if( !cart_ran_into_boundary_wall_flag && !cart_ran_into_static_obstacle_flag )
 
-                write_and_print( io, "Simulating for time interval - (" * string(time_taken_by_cart) * " , " * string(time_taken_by_cart+1) * ")" )
+                write_and_print( io, "Simulating for time interval - (" * string(time_taken_by_cart) * " , " * string(time_taken_by_cart+one_time_step) * ")" )
                 write_and_print( io, "Current cart state = " * string(env_right_now.cart) )
 
                 #Solve POMDP to get the best action
@@ -111,8 +111,8 @@ function run_one_simulation_2D_POMDP_planner(env_right_now, user_defined_rng, m,
                 end
                 write_and_print( io, "Action chosen by 2D action space POMDP planner: " * string((a[1]*180/pi, a[2])) )
                 dict_key = "t="*string(time_taken_by_cart)
-                # all_generated_trees[dict_key] = deepcopy(info)
-                all_generated_trees[dict_key] = nothing
+                all_generated_trees[dict_key] = deepcopy(info)
+                # all_generated_trees[dict_key] = nothing
                 all_actions[dict_key] = a
 
                 if(env_right_now.cart.v!=0 && a[2] == -10.0)
@@ -122,22 +122,22 @@ function run_one_simulation_2D_POMDP_planner(env_right_now, user_defined_rng, m,
 
                 if(env_right_now.cart.v != 0.0)
                     #That means the cart is not stationary and we now have to simulate both cart and the pedestrians.
-                    steering_angle = atan((env_right_now.cart.L*a[1])/env_right_now.cart.v)
-                    current_belief_over_complete_cart_lidar_data, risks_in_simulation = simulate_cart_and_pedestrians_and_generate_gif_environments_when_cart_moving(
+                    steering_angle = atan((env_right_now.cart.L*a[1])/(env_right_now.cart.v*one_time_step))
+                    current_belief_over_complete_cart_lidar_data, risks_in_simulation = simulate_cart_and_pedestrians_and_generate_gif_environments(
                                                                         env_right_now,current_belief_over_complete_cart_lidar_data, all_gif_environments,
                                                                         all_risky_scenarios, time_taken_by_cart,num_humans_to_care_about_while_pomdp_planning,
                                                                         cone_half_angle, lidar_range, m.pedestrian_distance_threshold,
-                                                                        user_defined_rng, steering_angle)
+                                                                        user_defined_rng, one_time_step, steering_angle)
                     current_belief =  get_belief_for_selected_humans_from_belief_over_complete_lidar_data(current_belief_over_complete_cart_lidar_data,
                                                                         env_right_now.complete_cart_lidar_data, env_right_now.cart_lidar_data)
                     number_risks += risks_in_simulation
                 else
                     #That means the cart is stationary and we now just have to simulate the pedestrians.
-                    current_belief_over_complete_cart_lidar_data, risks_in_simulation = simulate_pedestrians_and_generate_gif_environments_when_cart_stationary(
+                    current_belief_over_complete_cart_lidar_data, risks_in_simulation = simulate_cart_and_pedestrians_and_generate_gif_environments(
                                                                         env_right_now,current_belief_over_complete_cart_lidar_data,all_gif_environments,
                                                                         all_risky_scenarios, time_taken_by_cart,num_humans_to_care_about_while_pomdp_planning,
                                                                         cone_half_angle, lidar_range, m.pedestrian_distance_threshold,
-                                                                        user_defined_rng)
+                                                                        user_defined_rng, one_time_step, 0.0)
                     current_belief =  get_belief_for_selected_humans_from_belief_over_complete_lidar_data(current_belief_over_complete_cart_lidar_data,
                                                                         env_right_now.complete_cart_lidar_data, env_right_now.cart_lidar_data)
 
@@ -145,7 +145,7 @@ function run_one_simulation_2D_POMDP_planner(env_right_now, user_defined_rng, m,
                     number_risks += risks_in_simulation
                 end
 
-                time_taken_by_cart += 1
+                time_taken_by_cart += one_time_step
                 dict_key = "t="*string(time_taken_by_cart)
                 all_observed_environments[dict_key] = deepcopy(env_right_now)
                 all_generated_beliefs_using_complete_lidar_data[dict_key] = current_belief_over_complete_cart_lidar_data
@@ -262,7 +262,7 @@ if(run_simulation_flag)
     rand_noise_generator_for_solver = MersenneTwister(rand_noise_generator_seed_for_solver)
 
 
-    env = generate_ASPEN_environment_no_obstacles(4, rand_noise_generator_for_env)
+    env = generate_ASPEN_environment_no_obstacles(8, rand_noise_generator_for_env)
     env_right_now = deepcopy(env)
 
     filename = "output_just_2d_action_space_pomdp_planner.txt"
@@ -270,19 +270,22 @@ if(run_simulation_flag)
     write_and_print( io, "RNG seed for generating environemnt -> " * string(rand_noise_generator_seed_for_env))
     write_and_print( io, "RNG seed for simulating pedestrians -> " * string(rand_noise_generator_seed_for_sim))
 
-    #Create POMDP for env_right_now
-    #POMDP_Planner_2D_action_space <: POMDPs.POMDP{POMDP_state_2D_action_space,Int,Array{location,1}}
-    # discount_factor::Float64; pedestrian_distance_threshold::Float64; pedestrian_collision_penalty::Float64;
-    # obstacle_distance_threshold::Float64; obstacle_collision_penalty::Float64; goal_reward_distance_threshold::Float64;
-    # cart_goal_reached_distance_threshold::Float64; goal_reward::Float64; max_cart_speed::Float64; world::experiment_environment
-    golfcart_2D_action_space_pomdp = POMDP_Planner_2D_action_space(0.97,0.2,-100.0,2.0,-100.0,0.0,GLOBAL_RADIUS_AROUND_GOAL,100.0,2.0,env_right_now)
+    #=
+    Create POMDP for env_right_now
+    POMDP_Planner_2D_action_space <: POMDPs.POMDP{POMDP_state_2D_action_space,Int,Array{location,1}}
+     discount_factor::Float64; pedestrian_distance_threshold::Float64; pedestrian_collision_penalty::Float64;
+     obstacle_distance_threshold::Float64; obstacle_collision_penalty::Float64; goal_reward_distance_threshold::Float64;
+     cart_goal_reached_distance_threshold::Float64; goal_reward::Float64; max_cart_speed::Float64;
+     one_time_step::Float64; world::experiment_environment
+    =#
+    golfcart_2D_action_space_pomdp = POMDP_Planner_2D_action_space(0.97,0.2,-100.0,2.0,-100.0,0.0,GLOBAL_RADIUS_AROUND_GOAL,100.0,2.0,GLOBAL_TIME_STEP,env_right_now)
     discount(p::POMDP_Planner_2D_action_space) = p.discount_factor
     isterminal(::POMDP_Planner_2D_action_space, s::POMDP_state_2D_action_space) = is_terminal_state_pomdp_planning(s,location(-100.0,-100.0));
     #actions(::POMDP_Planner_2D_action_space) = [(-pi/4,0.0),(-pi/6,0.0),(-pi/12,0.0),(0.0,-1.0),(0.0,0.0),(0.0,1.0),(pi/12,0.0),(pi/6,0.0),(pi/4,0.0)]
     actions(m::POMDP_Planner_2D_action_space,b) = get_actions_non_holonomic(b)
 
     solver = DESPOTSolver(bounds=IndependentBounds(DefaultPolicyLB(FunctionPolicy(calculate_lower_bound_policy_pomdp_planning_2D_action_space),max_depth=100),
-                            calculate_upper_bound_value_pomdp_planning_2D_action_space, check_terminal=true),K=50,D=100,T_max=0.5, tree_in_info=true,
+                            calculate_upper_bound_value_pomdp_planning_2D_action_space, check_terminal=true),K=50,D=100,T_max=0.3, tree_in_info=true,
                             rng = rand_noise_generator_for_solver)
     # solver = DESPOTSolver(bounds=IndependentBounds(DefaultPolicyLB(FunctionPolicy(calculate_lower_bound_policy_pomdp_planning_2D_action_space),max_depth=100,
     #                         final_value=reward_to_be_awarded_at_max_depth_in_lower_bound_policy_rollout),

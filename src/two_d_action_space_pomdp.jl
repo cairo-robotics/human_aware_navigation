@@ -30,6 +30,7 @@ mutable struct POMDP_Planner_2D_action_space <: POMDPs.POMDP{POMDP_state_2D_acti
     cart_goal_reached_distance_threshold::Float64
     goal_reward::Float64
     max_cart_speed::Float64
+    one_time_step::Float64
     world::experiment_environment
 end
 
@@ -264,9 +265,6 @@ function POMDPs.gen(m::POMDP_Planner_2D_action_space, s, a, rng)
     collision_with_pedestrian_flag = false
     collision_with_obstacle_flag = false
     immediate_stop_flag = false
-    #Length of one time step
-    one_time_step = 1.0
-
     new_human_states = human_state[]
     observed_positions = location[]
 
@@ -293,7 +291,7 @@ function POMDPs.gen(m::POMDP_Planner_2D_action_space, s, a, rng)
         new_cart_velocity = clamp(s.cart.v + a[2], 0.0, m.max_cart_speed)
         num_time_intervals = 5
         cart_path::Vector{Tuple{Float64,Float64,Float64}} = update_cart_position_pomdp_planning_2D_action_space(s.cart, a[1], new_cart_velocity, m.world.length,
-                                                                                        m.world.breadth,m.cart_goal_reached_distance_threshold,one_time_step,num_time_intervals)
+                                                                                        m.world.breadth,m.cart_goal_reached_distance_threshold,m.one_time_step,num_time_intervals)
         new_cart_position = cart_path[end]
         #If cart goes out of bounds by taking this action
         if( (new_cart_position[1]>m.world.length) || (new_cart_position[2]>m.world.breadth) || (new_cart_position[1]<0.0) || (new_cart_position[2]<0.0) )
@@ -316,7 +314,7 @@ function POMDPs.gen(m::POMDP_Planner_2D_action_space, s, a, rng)
                         break
                     end
                 end
-                modified_human_state,observed_location = update_human_position_pomdp_planning(human, m.world, one_time_step, rng)
+                modified_human_state,observed_location = update_human_position_pomdp_planning(human, m.world, m.one_time_step, rng)
                 push!(new_human_states, modified_human_state)
                 push!(observed_positions, observed_location)
             end
