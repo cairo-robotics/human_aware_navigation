@@ -435,7 +435,7 @@ function respawn_humans(world, user_defined_rng_for_env)
     distance_threshold = 1.0
 
     while(num_humans_to_be_respawned!=0)
-        println("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Respawning Humans in the simulator ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+        # println("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Respawning Humans in the simulator ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
         rand_num = rand(user_defined_rng_for_env)
         rand_num_to_choose_side = floor(4*rand_num)
 
