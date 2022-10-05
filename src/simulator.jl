@@ -1,3 +1,308 @@
+Base.copy(obj::es_vehicle_parameters) = es_vehicle_parameters(obj.L,obj.max_speed,obj.goal)
+Base.copy(obj::ls_vehicle_parameters) = ls_vehicle_parameters(obj.L,obj.max_speed,obj.goal,obj.hybrid_astar_path)
+Base.copy(obj::Tuple{Array{human_state,1},Array{Int64,1}}) = (copy(obj[1]),copy(obj[2]))
+Base.copy(obj::nearby_humans) = nearby_humans(copy(obj.position_data),copy(obj.ids),copy(obj.belief))
+
+struct simulator
+    env::experiment_environment
+    vehicle::Vehicle
+    vehicle_params::Union{es_vehicle_parameters, ls_vehicle_parameters}
+    vehicle_sensor_data::vehicle_sensor
+    humans::Array{human_state,1}
+    humans_params::Array{human_parameters,1}
+    one_time_step::Float64
+end
+
+#=
+Function for moving vehicle in the environment
+Returns a vehicle struct object
+=#
+function propogate_vehicle(vehicle::Vehicle, vehicle_params::es_vehicle_parameters, steering_angle::Float64, speed::Float64, time_duration::Float64)
+    if(speed == 0.0)
+        return Vehicle(vehicle.x,vehicle.y,vehicle.theta,speed)
+    end
+    if(steering_angle == 0.0)
+        new_theta = vehicle.theta
+        new_x = vehicle.x + speed*cos(new_theta)*(time_duration)
+        new_y = vehicle.y + speed*sin(new_theta)*(time_duration)
+    else
+        new_theta = vehicle.theta + (speed * tan(steering_angle) * (time_duration) / vehicle_params.L)
+        new_theta = wrap_between_0_and_2Pi(new_theta)
+        new_x = vehicle.x + ((vehicle_params.L / tan(steering_angle)) * (sin(new_theta) - sin(vehicle.theta)))
+        new_y = vehicle.y + ((vehicle_params.L / tan(steering_angle)) * (cos(vehicle.theta) - cos(new_theta)))
+    end
+    return Vehicle(new_x,new_y,new_theta,speed)
+end
+
+#=
+Function for moving human in the environment
+Returns a human_state struct object
+=#
+function propogate_human(human::human_state, world::experiment_environment, one_time_step::Float64, user_defined_rng::AbstractRNG)
+
+    #Random noise in human's motion
+    scaling_factor_for_noise = 0.5  #Change this vairable to decide the amount of noise to be introduced
+    rand_num = (rand(user_defined_rng) - 0.5)*human.v*one_time_step*scaling_factor_for_noise
+
+    #First Quadrant
+    if(human.goal.x >= human.x && human.goal.y >= human.y)
+        if(human.goal.x == human.x)
+            new_x = human.x
+            new_y = human.y + (human.v)*one_time_step + rand_num
+        elseif(human.goal.y == human.y)
+            new_x = human.x + (human.v)*one_time_step + rand_num
+            new_y = human.y
+        else
+            heading_angle = atan((human.goal.y - human.y) / (human.goal.x - human.x))
+            new_x = human.x + ((human.v)*one_time_step + rand_num)*cos(heading_angle)
+            new_y = human.y + ((human.v)*one_time_step + rand_num)*sin(heading_angle)
+        end
+    #Second Quadrant
+    elseif(human.goal.x <= human.x && human.goal.y >= human.y)
+        if(human.goal.x == human.x)
+            new_x = human.x
+            new_y = human.y + (human.v)*one_time_step + rand_num
+        elseif(human.goal.y == human.y)
+            new_x = human.x - (human.v)*one_time_step - rand_num
+            new_y = human.y
+        else
+            heading_angle = atan((human.goal.y - human.y) / (human.goal.x - human.x))
+            new_x = human.x - ((human.v)*one_time_step + rand_num)*cos(heading_angle)
+            new_y = human.y - ((human.v)*one_time_step + rand_num)*sin(heading_angle)
+        end
+    #Third Quadrant
+    elseif(human.goal.x <= human.x && human.goal.y <= human.y)
+        if(human.goal.x == human.x)
+            new_x = human.x
+            new_y = human.y - (human.v)*one_time_step - rand_num
+        elseif(human.goal.y == human.y)
+            new_x = human.x - (human.v)*one_time_step - rand_num
+            new_y = human.y
+        else
+            heading_angle = atan((human.goal.y - human.y) / (human.goal.x - human.x))
+            new_x = human.x - ((human.v)*one_time_step + rand_num)*cos(heading_angle)
+            new_y = human.y - ((human.v)*one_time_step + rand_num)*sin(heading_angle)
+        end
+    #Fourth Quadrant
+    else(human.goal.x >= human.x && human.goal.y <= human.y)
+        if(human.goal.x == human.x)
+            new_x = human.x
+            new_y = human.y - (human.v)*one_time_step - rand_num
+        elseif(human.goal.y == human.y)
+            new_x = human.x + (human.v)*one_time_step + rand_num
+            new_y = human.y
+        else
+            heading_angle = atan((human.goal.y - human.y) / (human.goal.x - human.x))
+            new_x = human.x + ((human.v)*one_time_step + rand_num)*cos(heading_angle)
+            new_y = human.y + ((human.v)*one_time_step + rand_num)*sin(heading_angle)
+        end
+    end
+
+    new_x = clamp(new_x,0,world.length)
+    new_y = clamp(new_y,0,world.breadth)
+    #@show(new_x,new_y)
+    new_human_state = human_state(new_x, new_y, human.v, human.goal)
+    return new_human_state
+end
+
+#=
+Functions to modify vehicle_params
+Returns a vehicle_parameters struct object
+=#
+function modify_vehicle_params(params::es_vehicle_parameters)
+    return es_vehicle_parameters(params.L,params.max_speed,params.goal)
+end
+
+function modify_vehicle_params(params::ls_vehicle_parameters)
+    return ls_vehicle_parameters(params.L,params.max_speed,params.goal,params.hybrid_astar_path[2:end])
+end
+
+function get_lidar_data_and_ids(vehicle,humans,humans_params,lidar_range)
+    lidar_data = Array{human_state,1}()
+    ids = Array{Int64,1}()
+    for i in 1:length(humans)
+        human = humans[i]
+        id = humans_params[i].id
+        if(is_within_range(vehicle.x,vehicle.y,human.x,human.y,lidar_range))
+            if(human.x!= human.goal.x || human.y!= human.goal.y)
+                push!(lidar_data,human)
+                push!(ids,id)
+            end
+        end
+    end
+    return lidar_data,ids
+end
+
+#=
+Function to check if it is time to update the vehicle's belief
+Return the updated belief if it is time, else create a copy of passed belief and return it.
+=#
+function get_belief(old_sensor_data, new_lidar_data, new_ids, human_goal_locations)
+    new_belief = update_belief(old_sensor_data,new_lidar_data,new_ids,human_goal_locations)
+    return new_belief
+end
+
+function get_vehicle_sensor_data(veh,humans,humans_params,old_sensor_data,exp_details,current_time_value)
+    if( isinteger(current_time_value/exp_details.update_sensor_data_time_interval) )
+        new_lidar_data, new_ids = get_lidar_data_and_ids(veh,humans,humans_params,exp_details.lidar_range)
+        new_belief = get_belief(old_sensor_data, new_lidar_data, new_ids, exp_details.human_goal_locations)
+        return vehicle_sensor(new_lidar_data,new_ids,new_belief)
+    else
+        return vehicle_sensor(copy(old_sensor_data.lidar_data),copy(old_sensor_data.ids),copy(old_sensor_data.belief))
+    end
+end
+
+
+function get_nearby_humans(sim_obj,num_nearby_humans,min_safe_distance_from_human,cone_half_angle::Float64=pi/3.0)
+
+    nearby_humans_position_data = Array{human_state,1}()
+    nearby_humans_id = Array{Int64,1}()
+    nearby_humans_belief = Array{belief_over_human_goals,1}()
+    priority_queue_nearby_humans = PriorityQueue{Tuple{human_state,Int64,belief_over_human_goals},Float64}(Base.Order.Forward)
+    humans = sim_obj.vehicle_sensor_data.lidar_data
+    ids = sim_obj.vehicle_sensor_data.ids
+    current_belief = sim_obj.vehicle_sensor_data.belief
+    vehicle = sim_obj.vehicle
+
+    for i in 1:length(humans)
+        human = humans[i]
+        human_id = ids[i]
+        human_belief = current_belief[i]
+        angle_between_vehicle_and_human = get_heading_angle(human.x, human.y, vehicle.x, vehicle.y)
+        difference_in_angles = abs(vehicle.theta - angle_between_vehicle_and_human)
+        euclidean_distance = sqrt( (vehicle.x - human.x)^2 + (vehicle.y - human.y)^2 )
+        if(difference_in_angles <= cone_half_angle)
+            priority_queue_nearby_humans[(human,human_id,human_belief)] = euclidean_distance
+        elseif((2*pi - difference_in_angles) <= cone_half_angle)
+            priority_queue_nearby_humans[(human,human_id,human_belief)] = euclidean_distance
+        elseif(euclidean_distance<=min_safe_distance_from_human+sim_obj.vehicle_params.L)
+            priority_queue_nearby_humans[(human,human_id,human_belief)] = euclidean_distance
+        end
+    end
+
+    num_nearby_humans = min(num_nearby_humans, length(priority_queue_nearby_humans))
+    for i in 1:num_nearby_humans
+        human,id,belief = dequeue!(priority_queue_nearby_humans)
+        push!(nearby_humans_position_data, human)
+        push!(nearby_humans_id, id)
+        push!(nearby_humans_belief, belief)
+    end
+
+    return nearby_humans(nearby_humans_position_data,nearby_humans_id,nearby_humans_belief)
+end
+
+function get_nearby_humans(vehicle, vehicle_params, lidar_data, num_nearby_humans, min_safe_distance_from_human, cone_half_angle::Float64=pi/3.0)
+    nearby_humans = Array{human_state,1}()
+    index_nearby_humans = Array{Int64,1}()
+    priority_queue_nearby_humans = PriorityQueue{Tuple{human_state,Int64},Float64}(Base.Order.Forward)
+    humans = lidar_data[1]
+    for i in 1:length(humans)
+        human = humans[i]
+        index_human_in_lidar_data = i  #Position of this human in the lidar data array. Need this position to access corresponding belief
+        angle_between_vehicle_and_human = get_heading_angle(human.x, human.y, vehicle.x, vehicle.y)
+        difference_in_angles = abs(vehicle.theta - angle_between_vehicle_and_human)
+        euclidean_distance = sqrt( (vehicle.x - human.x)^2 + (vehicle.y - human.y)^2 )
+        if(difference_in_angles <= cone_half_angle)
+            priority_queue_nearby_humans[(human,index_human_in_lidar_data)] = euclidean_distance
+        elseif((2*pi - difference_in_angles) <= cone_half_angle)
+            priority_queue_nearby_humans[(human,index_human_in_lidar_data)] = euclidean_distance
+        elseif(euclidean_distance<=min_safe_distance_from_human+vehicle_params.L)
+            priority_queue_nearby_humans[(human,index_human_in_lidar_data)] = euclidean_distance
+        end
+    end
+
+    num_nearby_humans = min(num_nearby_humans, length(priority_queue_nearby_humans))
+    for i in 1:num_nearby_humans
+        human,index = dequeue!(priority_queue_nearby_humans)
+        push!(nearby_humans, human)
+        push!(index_nearby_humans, index)
+    end
+
+    return (nearby_humans, index_nearby_humans)
+end
+
+function get_belief_nearby_humans(sensor_data, nearby_humans, index_nearby_humans)
+    belief_nearby_humans = Array{belief_over_human_goals,1}()
+    for index in index_nearby_humans
+        push!(belief_nearby_humans, sensor_data.belief[index])
+    end
+    return belief_nearby_humans
+end
+
+#=
+Function to simulate vehicle and humans in the environment for given time duration.
+Propogate humans for simulator's one time step.
+Propogate vehicle for simulator's one time step.
+Get current lidar data.
+Create new struct object for vehicle params.
+Create new struct object for the vehicle.
+Create new struct object for the humans.
+=#
+function simulate_vehicle_and_humans!(sim::simulator, vehicle_steering_angle::Float64, vehicle_speed::Float64, current_time::Float64, time_duration::Float64, exp_details::experiment_details)
+
+    number_steps_in_sim = Int64(time_duration/sim.one_time_step)
+    current_sim_obj = sim
+    for i in 1:number_steps_in_sim
+        CURRENT_TIME_VALUE = current_time + (i*current_sim_obj.one_time_step)
+        propogated_humans = Array{human_state,1}(undef,exp_details.num_humans_env)
+        for i in 1:exp_details.num_humans_env
+            propogated_humans[i] = propogate_human(current_sim_obj.humans[i], current_sim_obj.env, current_sim_obj.one_time_step, exp_details.user_defined_rng)
+        end
+        #Get new vehicle object and new vehicle_params object
+        new_veh_obj = propogate_vehicle(current_sim_obj.vehicle, current_sim_obj.vehicle_params, vehicle_steering_angle, vehicle_speed, current_sim_obj.one_time_step)
+        new_vehicle_parameters = copy(current_sim_obj.vehicle_params)
+
+        #Get new vehicle sensor data
+        new_sensor_data_obj = get_vehicle_sensor_data(new_veh_obj,propogated_humans,current_sim_obj.humans_params,
+                            current_sim_obj.vehicle_sensor_data,exp_details,CURRENT_TIME_VALUE)
+
+        #Create a new simulator object
+        new_sim_object = simulator(current_sim_obj.env, new_veh_obj, new_vehicle_parameters, new_sensor_data_obj, propogated_humans, current_sim_obj.humans_params, current_sim_obj.one_time_step)
+
+        #Check if this is a risky scenario
+        num_risks_this_time_step = get_num_risks(new_veh_obj, new_vehicle_parameters, new_sensor_data_obj.lidar_data, exp_details.min_safe_distance_from_human)
+        if(num_risks_this_time_step!=0)
+            exp_details.number_risky_scenarios += num_risks_this_time_step
+            exp_details.risky_scenarios[CURRENT_TIME_VALUE] = new_sim_object
+        end
+
+        exp_details.sim_objects[CURRENT_TIME_VALUE] = new_sim_object
+        exp_details.observed_beliefs[CURRENT_TIME_VALUE] = new_sensor_data_obj.belief
+        exp_details.nearby_humans[CURRENT_TIME_VALUE] = copy(exp_details.nearby_humans[current_time])
+        current_sim_obj = new_sim_object
+    end
+    return current_sim_obj
+end
+
+#=
+Function to check if it is time to stop the simulation
+Returns true or false
+=#
+function stop_simulation!(sim_obj,curr_time, exp_details)
+    #Check if the vehicle has reached the goal
+    if(is_within_range(sim_obj.vehicle.x,sim_obj.vehicle.y,sim_obj.vehicle_params.goal.x,sim_obj.vehicle_params.goal.y,exp_details.radius_around_vehicle_goal))
+        exp_details.vehicle_reached_goal_flag = true
+        return true
+    end
+    #Check if the vehicle is colliding with obstacles in the environment
+    for obstacle in sim_obj.env.obstacles
+        if(in_obstacle(sim_obj.vehicle.x,sim_obj.vehicle.y,obstacle,sim_obj.vehicle.L))
+            exp.details.vehicle_ran_into_obstacle_flag = true
+            return true
+        end
+    end
+    #Check if the vehicle is colliding with environment's boundary
+    if(sim_obj.vehicle.x<0.0+sim_obj.vehicle_params.L || sim_obj.vehicle.y<0.0+sim_obj.vehicle_params.L ||
+        sim_obj.vehicle.x>sim_obj.env.length-sim_obj.vehicle_params.L || sim_obj.vehicle.y>sim_obj.env.breadth-sim_obj.vehicle_params.L)
+        exp_details.vehicle_ran_into_boundary_wall_flag = true
+        return true
+    end
+    if(curr_time >= exp_details.MAX_TIME_LIMIT)
+        return true
+    end
+    return false
+end
+
 #Functions for simulating the cart and pedestrians for the 2D planner
 
 #Returns the updated belief over humans and number of risks encountered

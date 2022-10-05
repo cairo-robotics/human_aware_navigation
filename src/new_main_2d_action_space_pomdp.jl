@@ -8,8 +8,6 @@ using FileIO
 using JLD2
 using D3Trees
 
-Base.copy(s::cart_state) = cart_state(s.x, s.y,s.theta,s.v,s.L,s.goal)
-
 #Define some global variables
 GLOBAL_RADIUS_AROUND_GOAL = 1.0
 GLOBAL_TIME_STEP = 0.5

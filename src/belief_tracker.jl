@@ -12,7 +12,7 @@ function calculate_human_dist_from_all_goals(human_position,list_of_goals)
     return distance_list
 end
 
-function is_human_present_in_the_list(human,old_lidar_data)
+function is_human_present_in_lidar_data(human,old_lidar_data)
     for human_old_lidar_data_index in 1:length(old_lidar_data)
         if(human.id == old_lidar_data[human_old_lidar_data_index].id)
             return human_old_lidar_data_index
@@ -21,29 +21,88 @@ function is_human_present_in_the_list(human,old_lidar_data)
     return -1
 end
 
-function update_belief(current_belief,all_goals_list, old_cart_lidar_data, new_cart_lidar_data)
-    #@show("INSIDE",current_belief, old_cart_lidar_data, new_cart_lidar_data,"*****")
-    new_belief = Array{human_probability_over_goals,1}()
-    for human_index_in_new_lidar_data in 1:length(new_cart_lidar_data)
-        human_index_in_old_lidar_data = is_human_present_in_the_list(new_cart_lidar_data[human_index_in_new_lidar_data],
-            old_cart_lidar_data)
-        if(human_index_in_old_lidar_data == -1)
-            push!(new_belief,human_probability_over_goals([0.25,0.25,0.25,0.25]))
+
+function update_belief(old_sensor_data::vehicle_sensor, new_human_states, new_ids, all_goals_list)
+    new_belief = Array{belief_over_human_goals,1}()
+    old_human_states = old_sensor_data.lidar_data
+    old_ids = old_sensor_data.ids
+    old_belief = old_sensor_data.belief
+    num_goals = length(all_goals_list)
+
+    for i in 1:length(new_human_states)
+        #=
+        Check if new id is present in old ids list.
+        If not, then initialize new belief to uniform distribution for this human.
+        If yes, then find the index at which it is. Use that index to get the old belief and generate new belief.
+        Push the new belief in the list!
+        =#
+        id_tbf = new_ids[i]
+        id_position_in_old_ids = findall(x->x==id_tbf, old_ids)
+        if(length(id_position_in_old_ids) == 0)
+            belief_new_human = belief_over_human_goals(repeat([1/num_goals], num_goals))
+            push!(new_belief,belief_new_human)
         else
-            old_human_dist_from_all_goals_list = calculate_human_dist_from_all_goals(
-                old_cart_lidar_data[human_index_in_old_lidar_data],all_goals_list)
-            new_human_dist_from_all_goals_list = calculate_human_dist_from_all_goals(
-                new_cart_lidar_data[human_index_in_new_lidar_data],all_goals_list)
-            human_prob_over_goals_list = old_human_dist_from_all_goals_list .- new_human_dist_from_all_goals_list
-            minimum_unnormalized_value = abs(minimum(human_prob_over_goals_list))
-            for i in 1:length(human_prob_over_goals_list)
-                human_prob_over_goals_list[i] += (minimum_unnormalized_value + 1)
+            required_index = id_position_in_old_ids[1]
+            required_belief = old_belief[required_index].pdf
+            required_human_from_old_list = old_human_states[required_index]
+            required_human_from_new_list = new_human_states[i]
+            old_distance_from_all_goals = calculate_human_dist_from_all_goals(required_human_from_old_list,all_goals_list)
+            new_distance_from_all_goals = calculate_human_dist_from_all_goals(required_human_from_new_list,all_goals_list)
+            human_prob_over_goals = old_distance_from_all_goals .- new_distance_from_all_goals
+            minimum_unnormalized_value = abs(minimum(human_prob_over_goals))
+            for i in 1:length(human_prob_over_goals)
+                human_prob_over_goals[i] += (minimum_unnormalized_value + 1)
             end
             #human_prob_over_goals_list = broadcast(x-> x+1+abs(minimum(human_prob_over_goals_list)),human_prob_over_goals_list)
-            updated_belief_for_current_human = (current_belief[human_index_in_old_lidar_data].distribution).*human_prob_over_goals_list
+            updated_belief_for_current_human = required_belief.*human_prob_over_goals
             updated_belief_for_current_human = updated_belief_for_current_human/sum(updated_belief_for_current_human)
             #@show(updated_belief_for_current_human)
-            push!(new_belief,human_probability_over_goals(updated_belief_for_current_human))
+            push!(new_belief,belief_over_human_goals(updated_belief_for_current_human))
+        end
+    end
+    return new_belief
+end
+
+
+function update_belief(current_belief::Array{belief_over_human_goals,1},all_goals_list,old_lidar_data,new_lidar_data)
+    #@show("INSIDE",current_belief, old_cart_lidar_data, new_cart_lidar_data,"*****")
+    new_belief = Array{belief_over_human_goals,1}()
+    human_positions_old = old_lidar_data[1]
+    index_list_old = old_lidar_data[2]
+    human_positions_new = new_lidar_data[1]
+    index_list_new = new_lidar_data[2]
+
+    for i in 1:length(index_list_new)
+
+        #=
+        Check if new index is present in old list.
+        If not, then initialize new belief to uniform distribution for this human.
+        If yes, then find the index at which it is. Use that index to get the old belief and generate new belief.
+        Push the new belief in the list!
+        =#
+        index_new = index_list_new[i]
+        index_new_position_in_old_list = findall(x->x==index_new, index_list_old)
+        if(length(index_new_position_in_old_list) == 0)
+            num_goals = length(all_goals_list)
+            belief_over_new_human = belief_over_human_goals(repeat([1/num_goals], num_goals))
+            push!(new_belief,belief_over_new_human)
+        else
+            required_index = index_new_position_in_old_list[1]
+            required_belief = current_belief[required_index].pdf
+            required_human_from_old_list = human_positions_old[required_index]
+            required_human_from_new_list = human_positions_new[i]
+            old_distance_from_all_goals = calculate_human_dist_from_all_goals(required_human_from_old_list,all_goals_list)
+            new_distance_from_all_goals = calculate_human_dist_from_all_goals(required_human_from_new_list,all_goals_list)
+            human_prob_over_goals = old_distance_from_all_goals .- new_distance_from_all_goals
+            minimum_unnormalized_value = abs(minimum(human_prob_over_goals))
+            for i in 1:length(human_prob_over_goals)
+                human_prob_over_goals[i] += (minimum_unnormalized_value + 1)
+            end
+            #human_prob_over_goals_list = broadcast(x-> x+1+abs(minimum(human_prob_over_goals_list)),human_prob_over_goals_list)
+            updated_belief_for_current_human = required_belief.*human_prob_over_goals
+            updated_belief_for_current_human = updated_belief_for_current_human/sum(updated_belief_for_current_human)
+            #@show(updated_belief_for_current_human)
+            push!(new_belief,belief_over_human_goals(updated_belief_for_current_human))
         end
     end
     return new_belief
