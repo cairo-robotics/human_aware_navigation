@@ -71,7 +71,7 @@ function Base.rand(rng::AbstractRNG, scenario_params::tree_search_scenario_param
     for i in 1:length(scenario_params.nearby_humans)
         sampled_goal = Distributions.rand(rng, SparseCat(scenario_params.human_goals,scenario_params.nearby_humans_belief[i].pdf))
         new_human = human_state(scenario_params.nearby_humans[i].x,scenario_params.nearby_humans[i].y,scenario_params.nearby_humans[i].v,sampled_goal)
-        new_human, dis_o = update_human_position_pomdp_planning(new_human,50.0,50.0,0.5,1.0,rng)
+        new_human = update_human_position(new_human,50.0,50.0,0.5,rng)
         push!(humans, new_human)
     end
     return state_extended_space_POMDP_planner(scenario_params.vehicle_x,scenario_params.vehicle_y,scenario_params.vehicle_theta,
@@ -81,7 +81,7 @@ end
 #************************************************************************************************
 #Simulate humans one step forward in POMDP planning
 
-function update_human_position_pomdp_planning(human::human_state,world_length::Float64,world_breadth::Float64,time_step::Float64,discretization_step_length::Float64,rng::AbstractRNG)
+function update_human_position(human::human_state,world_length::Float64,world_breadth::Float64,time_step::Float64,rng::AbstractRNG)
 
     rand_num = (rand(rng) - 0.5)*0.2
     #rand_num = 0.0
@@ -141,12 +141,9 @@ function update_human_position_pomdp_planning(human::human_state,world_length::F
 
     new_x = clamp(new_x,0.0,world_length)
     new_y = clamp(new_y,0.0,world_breadth)
-    discrete_new_x = floor(new_x/discretization_step_length) * discretization_step_length
-    discrete_new_y = floor(new_y/discretization_step_length) * discretization_step_length
     new_human_state = human_state(new_x,new_y,human.v,human.goal)
-    observed_location = location(discrete_new_x, discrete_new_y)
 
-    return new_human_state,observed_location
+    return new_human_state
 end
 #=
 unit_test_human = human_state(10.0,10.0,1.0,location(100.0,100.0),7.0)
@@ -159,7 +156,7 @@ update_human_position_pomdp_planning(unit_test_human,100.0,100.0,1.0,1.0,Mersenn
 #************************************************************************************************
 #Simulate the vehicle one step forward in POMDP planning
 
-function update_vehicle_position_pomdp_planning(vehicle_x::Float64, vehicle_y::Float64, vehicle_theta::Float64, vehicle_L::Float64,
+function update_vehicle_position(vehicle_x::Float64, vehicle_y::Float64, vehicle_theta::Float64, vehicle_L::Float64,
                                                             delta_heading_angle::Float64, new_vehicle_speed::Float64, world_length::Float64,
                                                             world_breadth::Float64, one_time_step::Float64, num_time_segments::Int64 = 10)
 
@@ -274,7 +271,7 @@ function POMDPs.gen(m::extended_space_POMDP_planner, s, a, rng)
     observed_positions = location[]
 
     if(is_within_range(s.vehicle_x,s.vehicle_y, s.vehicle_goal.x, s.vehicle_goal.y, m.radius_around_vehicle_goal))
-        #println("Goal reached")
+        # println("Goal reached")
         new_vehicle_position = (-100.0, -100.0, -100.0)
         vehicle_reached_goal_flag = true
         new_vehicle_speed = clamp(s.vehicle_v + a.delta_speed, 0.0, m.max_vehicle_speed)
@@ -290,7 +287,7 @@ function POMDPs.gen(m::extended_space_POMDP_planner, s, a, rng)
             immediate_stop_flag = true
         end
         new_vehicle_speed = clamp(s.vehicle_v + a.delta_speed, 0.0, m.max_vehicle_speed)
-        vehicle_path::Vector{Tuple{Float64,Float64,Float64}} = update_vehicle_position_pomdp_planning(s.vehicle_x, s.vehicle_y, s.vehicle_theta, s.vehicle_L,
+        vehicle_path::Vector{Tuple{Float64,Float64,Float64}} = update_vehicle_position(s.vehicle_x, s.vehicle_y, s.vehicle_theta, s.vehicle_L,
                                                         a.delta_heading_angle, new_vehicle_speed, m.world.length, m.world.breadth, m.one_time_step, m.num_segments_in_one_time_step)
         new_vehicle_position = vehicle_path[end]
         #If vehicle goes out of bounds by taking this action
@@ -316,8 +313,11 @@ function POMDPs.gen(m::extended_space_POMDP_planner, s, a, rng)
                         break
                     end
                 end
-                modified_human_state,observed_location = update_human_position_pomdp_planning(human,m.world.length,m.world.breadth,m.one_time_step,m.observation_discretization_length,rng)
+                modified_human_state = update_human_position(human,m.world.length,m.world.breadth,m.one_time_step,rng)
                 push!(new_human_states, modified_human_state)
+                discrete_new_x = floor(modified_human_state.x/m.observation_discretization_length) * m.observation_discretization_length
+                discrete_new_y = floor(modified_human_state.y/m.observation_discretization_length) * m.observation_discretization_length
+                observed_location = location(discrete_new_x, discrete_new_y)
                 push!(observed_positions, observed_location)
             end
             if(!collision_with_human_flag)
@@ -650,3 +650,8 @@ function get_actions(m::extended_space_POMDP_planner,b)
         # return [(delta_angle, 1.0),(-pi/4,0.0),(-pi/6,0.0),(-pi/12,0.0),(0.0,-1.0),(0.0,0.0),(0.0,1.0),(pi/12,1.0),(pi/6,0.0),(pi/4,0.0),(-10.0,-10.0)]
     end
 end
+
+
+discount(m::extended_space_POMDP_planner) = m.discount_factor
+isterminal(m::extended_space_POMDP_planner, s::state_extended_space_POMDP_planner) = is_terminal_state(s,location(-100.0,-100.0));
+actions(m::extended_space_POMDP_planner,b) = get_actions(m,b)

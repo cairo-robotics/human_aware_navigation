@@ -3,6 +3,8 @@ Base.copy(obj::ls_vehicle_parameters) = ls_vehicle_parameters(obj.L,obj.max_spee
 Base.copy(obj::Tuple{Array{human_state,1},Array{Int64,1}}) = (copy(obj[1]),copy(obj[2]))
 Base.copy(obj::nearby_humans) = nearby_humans(copy(obj.position_data),copy(obj.ids),copy(obj.belief))
 
+
+
 struct simulator
     env::experiment_environment
     vehicle::Vehicle
@@ -152,7 +154,6 @@ function get_vehicle_sensor_data(veh,humans,humans_params,old_sensor_data,exp_de
     end
 end
 
-
 function get_nearby_humans(sim_obj,num_nearby_humans,min_safe_distance_from_human,cone_half_angle::Float64=pi/3.0)
 
     nearby_humans_position_data = Array{human_state,1}()
@@ -191,57 +192,49 @@ function get_nearby_humans(sim_obj,num_nearby_humans,min_safe_distance_from_huma
     return nearby_humans(nearby_humans_position_data,nearby_humans_id,nearby_humans_belief)
 end
 
-function get_nearby_humans(vehicle, vehicle_params, lidar_data, num_nearby_humans, min_safe_distance_from_human, cone_half_angle::Float64=pi/3.0)
-    nearby_humans = Array{human_state,1}()
-    index_nearby_humans = Array{Int64,1}()
-    priority_queue_nearby_humans = PriorityQueue{Tuple{human_state,Int64},Float64}(Base.Order.Forward)
-    humans = lidar_data[1]
-    for i in 1:length(humans)
-        human = humans[i]
-        index_human_in_lidar_data = i  #Position of this human in the lidar data array. Need this position to access corresponding belief
-        angle_between_vehicle_and_human = get_heading_angle(human.x, human.y, vehicle.x, vehicle.y)
-        difference_in_angles = abs(vehicle.theta - angle_between_vehicle_and_human)
-        euclidean_distance = sqrt( (vehicle.x - human.x)^2 + (vehicle.y - human.y)^2 )
-        if(difference_in_angles <= cone_half_angle)
-            priority_queue_nearby_humans[(human,index_human_in_lidar_data)] = euclidean_distance
-        elseif((2*pi - difference_in_angles) <= cone_half_angle)
-            priority_queue_nearby_humans[(human,index_human_in_lidar_data)] = euclidean_distance
-        elseif(euclidean_distance<=min_safe_distance_from_human+vehicle_params.L)
-            priority_queue_nearby_humans[(human,index_human_in_lidar_data)] = euclidean_distance
+#=
+Function to check if it is time to stop the simulation
+Returns true or false
+=#
+function stop_simulation!(sim_obj,curr_time,exp_details)
+    #Check if the vehicle has reached the goal
+    if(is_within_range(sim_obj.vehicle.x,sim_obj.vehicle.y,sim_obj.vehicle_params.goal.x,sim_obj.vehicle_params.goal.y,exp_details.radius_around_vehicle_goal))
+        exp_details.vehicle_reached_goal = true
+        return true
+    end
+    #Check if the vehicle is colliding with obstacles in the environment
+    for obstacle in sim_obj.env.obstacles
+        if(in_obstacle(sim_obj.vehicle.x,sim_obj.vehicle.y,obstacle,sim_obj.vehicle.L))
+            exp.details.vehicle_ran_into_obstacle = true
+            return true
         end
     end
-
-    num_nearby_humans = min(num_nearby_humans, length(priority_queue_nearby_humans))
-    for i in 1:num_nearby_humans
-        human,index = dequeue!(priority_queue_nearby_humans)
-        push!(nearby_humans, human)
-        push!(index_nearby_humans, index)
+    #Check if the vehicle is colliding with environment's boundary
+    if(sim_obj.vehicle.x<0.0+sim_obj.vehicle_params.L || sim_obj.vehicle.y<0.0+sim_obj.vehicle_params.L ||
+        sim_obj.vehicle.x>sim_obj.env.length-sim_obj.vehicle_params.L || sim_obj.vehicle.y>sim_obj.env.breadth-sim_obj.vehicle_params.L)
+        exp_details.vehicle_ran_into_boundary_wall = true
+        return true
     end
-
-    return (nearby_humans, index_nearby_humans)
-end
-
-function get_belief_nearby_humans(sensor_data, nearby_humans, index_nearby_humans)
-    belief_nearby_humans = Array{belief_over_human_goals,1}()
-    for index in index_nearby_humans
-        push!(belief_nearby_humans, sensor_data.belief[index])
+    if(curr_time >= exp_details.MAX_TIME_LIMIT)
+        return true
     end
-    return belief_nearby_humans
+    return false
 end
 
 #=
 Function to simulate vehicle and humans in the environment for given time duration.
 Propogate humans for simulator's one time step.
 Propogate vehicle for simulator's one time step.
-Get current lidar data.
+Get new vehicle sensor data.
 Create new struct object for vehicle params.
 Create new struct object for the vehicle.
 Create new struct object for the humans.
 =#
 function simulate_vehicle_and_humans!(sim::simulator, vehicle_steering_angle::Float64, vehicle_speed::Float64, current_time::Float64, time_duration::Float64, exp_details::experiment_details)
 
-    number_steps_in_sim = Int64(time_duration/sim.one_time_step)
     current_sim_obj = sim
+    number_steps_in_sim = Int64(time_duration/current_sim_obj.one_time_step)
+
     for i in 1:number_steps_in_sim
         CURRENT_TIME_VALUE = current_time + (i*current_sim_obj.one_time_step)
         propogated_humans = Array{human_state,1}(undef,exp_details.num_humans_env)
@@ -260,50 +253,19 @@ function simulate_vehicle_and_humans!(sim::simulator, vehicle_steering_angle::Fl
         new_sim_object = simulator(current_sim_obj.env, new_veh_obj, new_vehicle_parameters, new_sensor_data_obj, propogated_humans, current_sim_obj.humans_params, current_sim_obj.one_time_step)
 
         #Check if this is a risky scenario
-        num_risks_this_time_step = get_num_risks(new_veh_obj, new_vehicle_parameters, new_sensor_data_obj.lidar_data, exp_details.min_safe_distance_from_human)
+        num_risks_this_time_step = get_num_risks(new_veh_obj, new_vehicle_parameters, new_sensor_data_obj.lidar_data, exp_details.max_risk_distance)
         if(num_risks_this_time_step!=0)
             exp_details.number_risky_scenarios += num_risks_this_time_step
             exp_details.risky_scenarios[CURRENT_TIME_VALUE] = new_sim_object
         end
 
         exp_details.sim_objects[CURRENT_TIME_VALUE] = new_sim_object
-        exp_details.observed_beliefs[CURRENT_TIME_VALUE] = new_sensor_data_obj.belief
         exp_details.nearby_humans[CURRENT_TIME_VALUE] = copy(exp_details.nearby_humans[current_time])
         current_sim_obj = new_sim_object
     end
     return current_sim_obj
 end
 
-#=
-Function to check if it is time to stop the simulation
-Returns true or false
-=#
-function stop_simulation!(sim_obj,curr_time, exp_details)
-    #Check if the vehicle has reached the goal
-    if(is_within_range(sim_obj.vehicle.x,sim_obj.vehicle.y,sim_obj.vehicle_params.goal.x,sim_obj.vehicle_params.goal.y,exp_details.radius_around_vehicle_goal))
-        exp_details.vehicle_reached_goal_flag = true
-        return true
-    end
-    #Check if the vehicle is colliding with obstacles in the environment
-    for obstacle in sim_obj.env.obstacles
-        if(in_obstacle(sim_obj.vehicle.x,sim_obj.vehicle.y,obstacle,sim_obj.vehicle.L))
-            exp.details.vehicle_ran_into_obstacle_flag = true
-            return true
-        end
-    end
-    #Check if the vehicle is colliding with environment's boundary
-    if(sim_obj.vehicle.x<0.0+sim_obj.vehicle_params.L || sim_obj.vehicle.y<0.0+sim_obj.vehicle_params.L ||
-        sim_obj.vehicle.x>sim_obj.env.length-sim_obj.vehicle_params.L || sim_obj.vehicle.y>sim_obj.env.breadth-sim_obj.vehicle_params.L)
-        exp_details.vehicle_ran_into_boundary_wall_flag = true
-        return true
-    end
-    if(curr_time >= exp_details.MAX_TIME_LIMIT)
-        return true
-    end
-    return false
-end
-
-#Functions for simulating the cart and pedestrians for the 2D planner
 
 #Returns the updated belief over humans and number of risks encountered
 function simulate_cart_and_pedestrians_and_generate_gif_environments(env_right_now, current_belief,
@@ -371,8 +333,6 @@ function simulate_cart_and_pedestrians_and_generate_gif_environments(env_right_n
 
     return final_updated_belief, number_risks
 end
-
-
 
 #Functions for simulating the cart and pedestrians for the 1D planner
 

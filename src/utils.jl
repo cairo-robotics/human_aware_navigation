@@ -380,45 +380,46 @@ function write_and_print(io::IOStream, string_to_be_written_and_printed::String)
     println(string_to_be_written_and_printed)
 end
 
+#=
+************************************************************************************************************************************************
+=#
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-function check_if_vehicle_collided_with_boundary_wall(world)
-    if( (world.cart.x<=world.length && world.cart.y<=world.breadth && world.cart.x>=0.0 && world.cart.y>=0.0) )
-        return false
-    else
-        return true
-    end
-end
-
-function check_if_cart_collided_with_static_obstacles(world)
-    for obstacle in world.obstacles
-        if(is_within_range_check_with_points(world.cart.x, world.cart.y, obstacle.x, obstacle.y, obstacle.r))
-            return true
+function get_nearby_humans(vehicle, vehicle_params, lidar_data, num_nearby_humans, min_safe_distance_from_human, cone_half_angle::Float64=pi/3.0)
+    nearby_humans = Array{human_state,1}()
+    index_nearby_humans = Array{Int64,1}()
+    priority_queue_nearby_humans = PriorityQueue{Tuple{human_state,Int64},Float64}(Base.Order.Forward)
+    humans = lidar_data[1]
+    for i in 1:length(humans)
+        human = humans[i]
+        index_human_in_lidar_data = i  #Position of this human in the lidar data array. Need this position to access corresponding belief
+        angle_between_vehicle_and_human = get_heading_angle(human.x, human.y, vehicle.x, vehicle.y)
+        difference_in_angles = abs(vehicle.theta - angle_between_vehicle_and_human)
+        euclidean_distance = sqrt( (vehicle.x - human.x)^2 + (vehicle.y - human.y)^2 )
+        if(difference_in_angles <= cone_half_angle)
+            priority_queue_nearby_humans[(human,index_human_in_lidar_data)] = euclidean_distance
+        elseif((2*pi - difference_in_angles) <= cone_half_angle)
+            priority_queue_nearby_humans[(human,index_human_in_lidar_data)] = euclidean_distance
+        elseif(euclidean_distance<=min_safe_distance_from_human+vehicle_params.L)
+            priority_queue_nearby_humans[(human,index_human_in_lidar_data)] = euclidean_distance
         end
     end
-    return false
+
+    num_nearby_humans = min(num_nearby_humans, length(priority_queue_nearby_humans))
+    for i in 1:num_nearby_humans
+        human,index = dequeue!(priority_queue_nearby_humans)
+        push!(nearby_humans, human)
+        push!(index_nearby_humans, index)
+    end
+
+    return (nearby_humans, index_nearby_humans)
+end
+
+function get_belief_nearby_humans(sensor_data, nearby_humans, index_nearby_humans)
+    belief_nearby_humans = Array{belief_over_human_goals,1}()
+    for index in index_nearby_humans
+        push!(belief_nearby_humans, sensor_data.belief[index])
+    end
+    return belief_nearby_humans
 end
 
 function check_consistency_personal_copy(io, s)

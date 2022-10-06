@@ -77,20 +77,19 @@ mutable struct experiment_details
     number_risky_scenarios::Int64
     num_humans_env::Int64
     one_time_step::Float64
+    simulator_time_step::Float64
     lidar_range::Float64
     MAX_TIME_LIMIT::Float64
     time_taken::Float64
     min_safe_distance_from_human::Float64
     radius_around_vehicle_goal::Float64
+    max_risk_distance::Float64
     update_sensor_data_time_interval::Float64
-    max_vehicle_speed::Float64
     buffer_time::Float64
-    vehicle_ran_into_boundary_wall_flag::Bool
-    vehicle_ran_into_obstacle_flag::Bool
-    vehicle_reached_goal_flag::Bool
-    experiment_success_flag::Bool
+    vehicle_ran_into_boundary_wall::Bool
+    vehicle_ran_into_obstacle::Bool
+    vehicle_reached_goal::Bool
     human_goal_locations::Array{location,1}
-    observed_beliefs::OrderedDict
     pomdp_planners::OrderedDict
     nearby_humans::OrderedDict
     despot_trees::OrderedDict

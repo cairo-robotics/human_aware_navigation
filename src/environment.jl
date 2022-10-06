@@ -74,7 +74,7 @@ function display_env(exp_details,time_value)
     for human in exp_details.nearby_humans[time_value].position_data
         # scatter!([env.cart_lidar_data[i].x], [env.cart_lidar_data[i].y],color="green",msize=0.1*plot_size/env.length)
         scatter!([human.x],[human.y],color="red")
-        plot!(circleShape(human.x,human.y,exp_details.min_safe_distance_from_human), lw=0.5, linecolor = :black,
+        plot!(circleShape(human.x,human.y,exp_details.max_risk_distance), lw=0.5, linecolor = :black,
                                             legend=false, fillalpha=0.2, aspect_ratio=1,c= :red, seriestype = [:shape,])
         human_heading_angle = get_heading_angle(human.goal.x, human.goal.y,human.x,human.y)
         quiver!([human.x],[human.y],quiver=([cos(human_heading_angle)],[sin(human_heading_angle)]), color="red")
@@ -87,7 +87,7 @@ function display_env(exp_details,time_value)
         is_nearby_human_flag = !(length(findall(x->x==green_human_id, exp_details.nearby_humans[time_value].ids)) == 0)
         if(!is_nearby_human_flag)
             scatter!([green_human.x],[green_human.y],color="green")
-            plot!(circleShape(green_human.x,green_human.y,exp_details.min_safe_distance_from_human), lw=0.5, linecolor = :black,
+            plot!(circleShape(green_human.x,green_human.y,exp_details.max_risk_distance), lw=0.5, linecolor = :black,
                                                 legend=false, fillalpha=0.2, aspect_ratio=1,c= :green, seriestype = [:shape,])
             human_heading_angle = get_heading_angle(green_human.goal.x, green_human.goal.y,green_human.x,green_human.y)
             quiver!([green_human.x],[green_human.y],quiver=([cos(human_heading_angle)],[sin(human_heading_angle)]), color="green")

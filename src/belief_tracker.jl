@@ -21,7 +21,6 @@ function is_human_present_in_lidar_data(human,old_lidar_data)
     return -1
 end
 
-
 function update_belief(old_sensor_data::vehicle_sensor, new_human_states, new_ids, all_goals_list)
     new_belief = Array{belief_over_human_goals,1}()
     old_human_states = old_sensor_data.lidar_data
