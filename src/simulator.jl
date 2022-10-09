@@ -2,8 +2,8 @@ Base.copy(obj::es_vehicle_parameters) = es_vehicle_parameters(obj.L,obj.max_spee
 Base.copy(obj::ls_vehicle_parameters) = ls_vehicle_parameters(obj.L,obj.max_speed,obj.goal,obj.hybrid_astar_path)
 Base.copy(obj::Tuple{Array{human_state,1},Array{Int64,1}}) = (copy(obj[1]),copy(obj[2]))
 Base.copy(obj::nearby_humans) = nearby_humans(copy(obj.position_data),copy(obj.ids),copy(obj.belief))
-
-
+Base.copy(obj::human_state) = human_state(obj.x,obj.y,obj.v,obj.goal)
+Base.copy(obj::human_parameters) = human_parameters(obj.id)
 
 struct simulator
     env::experiment_environment
@@ -14,6 +14,177 @@ struct simulator
     humans_params::Array{human_parameters,1}
     one_time_step::Float64
 end
+
+function in_obstacle(px,py,obstacle,padding=0.0)
+    return is_within_range(px,py,obstacle.x,obstacle.y,obstacle.r+padding)
+end
+
+function in_safe_area(px,py,vehicle_x,vehicle_y,world)
+    for obstacle in world.obstacles
+        if(in_obstacle(px,py,obstacle))
+            return false
+        end
+    end
+    if(is_within_range(px,py,vehicle_x,vehicle_y,4.0))
+        return false
+    end
+    return true
+end
+
+function get_human_goals(world)
+    g1 = location(0.0, 0.0)
+    g2 = location(0.0, world.breadth)
+    g3 = location(world.length, world.breadth)
+    g4 = location(world.length, 0.0)
+    return [g1,g2,g3,g4]
+end
+
+function get_human_start_position(world, vehicle_start_location, user_defined_rng)
+    human_x, human_y = rand(user_defined_rng,2).*(world.length,world.breadth)
+    while(!in_safe_area(human_x,human_y,vehicle_start_location.x,vehicle_start_location.y,world))
+        human_x, human_y = rand(user_defined_rng,2).*(world.length,world.breadth)
+    end
+    return (human_x,human_y)
+end
+
+
+function generate_humans(world,vehicle_start_location,human_start_velocity,all_goals_list,total_num_humans,user_defined_rng)
+    humans = Array{human_state,1}()
+    params = Array{human_parameters,1}()
+    curr_id = 1
+    for i in 1:total_num_humans
+        human_start_x,human_start_y = get_human_start_position(world, vehicle_start_location, user_defined_rng)
+        human_goal =  all_goals_list[Int(ceil(rand(user_defined_rng)*length(all_goals_list)))]
+        human = human_state(human_start_x,human_start_y,human_start_velocity,human_goal)
+        human_param = human_parameters(curr_id)
+        push!(humans, human)
+        push!(params, human_param)
+        curr_id += 1
+    end
+    return humans, params
+end
+#=
+unit_test_world = experiment_environment(100.0,100.0,[obstacle_location(30,30,15), obstacle_location(60,70,15)])
+unit_test_vehicle_start_location = location(1.0,25.0)
+unit_test_all_goals_list = [location(0.0,0.0),location(100.0,0.0),location(100.0,100.0),location(0.0,100.0)]
+generate_humans(unit_test_world,unit_test_vehicle_start_location,1.0,unit_test_all_goals_list,100,MersenneTwister(11))
+=#
+
+function spawn_new_human(exp_details, start_vehicle, vehicle_params)
+
+    println("************************Spawning new human************************")
+    #=
+    Choose which side to spawn human from
+    Find x and y
+    sample goal on the opposite edge
+    initialize and return a new human
+    =#
+
+    start_vehicle = output.sim_objects[0.0].vehicle
+
+    vehicle_goal = output.sim_objects[0.0].vehicle_params.goal
+    vehicle_L = output.sim_objects[0.0].vehicle_params.L
+    possible_sides = [ (0.0,Inf), (Inf,exp_details.env.breadth), (exp_details.env.length,Inf), (Inf,0.0) ]
+    chosen_x, chosen_y = rand(exp_details.user_defined_rng, possible_sides)
+
+    if(chosen_x!=Inf)
+        chosen_y = rand(exp_details.user_defined_rng)*exp_details.env.breadth
+        while( !in_safe_area(chosen_x,chosen_y,start_vehicle.x,start_vehicle.y,exp_details.env) ||
+                is_within_range(chosen_x,chosen_y,vehicle_goal.x,vehicle_goal.y, exp_details.radius_around_vehicle_goal+vehicle_L))
+            chosen_y = rand(exp_details.user_defined_rng)*exp_details.env.breadth
+        end
+        if(chosen_x == 0.0)
+            human_goal_x = exp_details.env.length
+            human_goal_y = rand(exp_details.user_defined_rng,[0.0, exp_details.env.breadth])
+        else
+            human_goal_x = 0.0
+            human_goal_y = rand(exp_details.user_defined_rng,[0.0, exp_details.env.breadth])
+        end
+        new_human = human_state(chosen_x,chosen_y,exp_details.human_start_v,location(human_goal_x,human_goal_y))
+        return new_human
+    end
+
+    if(chosen_y!=Inf)
+        chosen_x = rand(exp_details.user_defined_rng)*exp_details.env.length
+        while( !in_safe_area(chosen_x,chosen_y,start_vehicle.x,start_vehicle.y,exp_details.env) ||
+                is_within_range(chosen_x,chosen_y,vehicle_goal.x,vehicle_goal.y, exp_details.radius_around_vehicle_goal+vehicle_L))
+            chosen_x = rand(exp_details.user_defined_rng)*exp_details.env.breadth
+        end
+        if(chosen_y == 0.0)
+            human_goal_y = exp_details.env.breadth
+            human_goal_x = rand(exp_details.user_defined_rng,[0.0, exp_details.env.length])
+        else
+            human_goal_y = 0.0
+            human_goal_x = rand(exp_details.user_defined_rng,[0.0, exp_details.env.length])
+        end
+        new_human = human_state(chosen_x,chosen_y,exp_details.human_start_v,location(human_goal_x,human_goal_y))
+        return new_human
+    end
+end
+
+
+function respawn_humans(existing_humans,existing_humans_params,exp_details, output)
+
+    start_vehicle = output.sim_objects[0].vehicle
+    vehicle_params = output.sim_objects[0].vehicle_params
+    final_humans = Array{human_state,1}()
+    final_humans_params = Array{human_parameters,1}()
+
+    for i in 1:exp_details.num_humans_env
+        h = existing_humans[i]
+        h_params = existing_humans_params[i]
+        if( (h.x == h.goal.x) && (h.y == h.goal.y) )
+            continue
+        else
+            new_h = copy(h)
+            new_h_params = copy(h_params)
+            push!(final_humans, new_h)
+            push!(final_humans_params, new_h_params)
+        end
+    end
+
+    latest_id = existing_humans_params[end].id
+    num_respawn_humans = exp_details.num_humans_env - length(final_humans)
+
+    for i in 1:num_respawn_humans
+        h = spawn_new_human(exp_details, start_vehicle, vehicle_params)
+        h_params = human_parameters(latest_id+i)
+        push!(final_humans, h)
+        push!(final_humans_params, h_params)
+    end
+
+    return final_humans,final_humans_params
+end
+
+function get_lidar_data_and_ids(vehicle,humans,humans_params,lidar_range)
+    lidar_data = Array{human_state,1}()
+    ids = Array{Int64,1}()
+    for i in 1:length(humans)
+        human = humans[i]
+        id = humans_params[i].id
+        if(is_within_range(vehicle.x,vehicle.y,human.x,human.y,lidar_range))
+            if(human.x!= human.goal.x || human.y!= human.goal.y)
+                push!(lidar_data,human)
+                push!(ids,id)
+            end
+        end
+    end
+    return lidar_data,ids
+end
+
+#=
+Function to check if it is time to update the vehicle's belief
+Return the updated belief if it is time, else create a copy of passed belief and return it.
+=#
+function get_belief(old_sensor_data, new_lidar_data, new_ids, human_goal_locations)
+    new_belief = update_belief(old_sensor_data,new_lidar_data,new_ids,human_goal_locations)
+    return new_belief
+end
+
+function is_divisible(a,b)
+    return isapprox(round(a/b)*b, a)
+end
+
 
 #=
 Function for moving vehicle in the environment
@@ -119,33 +290,8 @@ function modify_vehicle_params(params::ls_vehicle_parameters)
     return ls_vehicle_parameters(params.L,params.max_speed,params.goal,params.hybrid_astar_path[2:end])
 end
 
-function get_lidar_data_and_ids(vehicle,humans,humans_params,lidar_range)
-    lidar_data = Array{human_state,1}()
-    ids = Array{Int64,1}()
-    for i in 1:length(humans)
-        human = humans[i]
-        id = humans_params[i].id
-        if(is_within_range(vehicle.x,vehicle.y,human.x,human.y,lidar_range))
-            if(human.x!= human.goal.x || human.y!= human.goal.y)
-                push!(lidar_data,human)
-                push!(ids,id)
-            end
-        end
-    end
-    return lidar_data,ids
-end
-
-#=
-Function to check if it is time to update the vehicle's belief
-Return the updated belief if it is time, else create a copy of passed belief and return it.
-=#
-function get_belief(old_sensor_data, new_lidar_data, new_ids, human_goal_locations)
-    new_belief = update_belief(old_sensor_data,new_lidar_data,new_ids,human_goal_locations)
-    return new_belief
-end
-
 function get_vehicle_sensor_data(veh,humans,humans_params,old_sensor_data,exp_details,current_time_value)
-    if( isinteger(current_time_value/exp_details.update_sensor_data_time_interval) )
+    if( is_divisible(current_time_value,exp_details.update_sensor_data_time_interval) )
         new_lidar_data, new_ids = get_lidar_data_and_ids(veh,humans,humans_params,exp_details.lidar_range)
         new_belief = get_belief(old_sensor_data, new_lidar_data, new_ids, exp_details.human_goal_locations)
         return vehicle_sensor(new_lidar_data,new_ids,new_belief)
@@ -196,26 +342,30 @@ end
 Function to check if it is time to stop the simulation
 Returns true or false
 =#
-function stop_simulation!(sim_obj,curr_time,exp_details)
+function stop_simulation!(sim_obj,curr_time,exp_details,output)
     #Check if the vehicle has reached the goal
     if(is_within_range(sim_obj.vehicle.x,sim_obj.vehicle.y,sim_obj.vehicle_params.goal.x,sim_obj.vehicle_params.goal.y,exp_details.radius_around_vehicle_goal))
-        exp_details.vehicle_reached_goal = true
+        output.vehicle_reached_goal = true
+        println("Vehicle has reached the goal")
         return true
     end
     #Check if the vehicle is colliding with obstacles in the environment
     for obstacle in sim_obj.env.obstacles
         if(in_obstacle(sim_obj.vehicle.x,sim_obj.vehicle.y,obstacle,sim_obj.vehicle.L))
-            exp.details.vehicle_ran_into_obstacle = true
+            output.vehicle_ran_into_obstacle = true
+            println("Vehicle collided with a static obstacle")
             return true
         end
     end
     #Check if the vehicle is colliding with environment's boundary
     if(sim_obj.vehicle.x<0.0+sim_obj.vehicle_params.L || sim_obj.vehicle.y<0.0+sim_obj.vehicle_params.L ||
         sim_obj.vehicle.x>sim_obj.env.length-sim_obj.vehicle_params.L || sim_obj.vehicle.y>sim_obj.env.breadth-sim_obj.vehicle_params.L)
-        exp_details.vehicle_ran_into_boundary_wall = true
+        output.vehicle_ran_into_boundary_wall = true
+        println("Vehicle collided with environment boundary")
         return true
     end
     if(curr_time >= exp_details.MAX_TIME_LIMIT)
+        println("Vehicle didn't reach the goal in givem time limit")
         return true
     end
     return false
@@ -230,7 +380,8 @@ Create new struct object for vehicle params.
 Create new struct object for the vehicle.
 Create new struct object for the humans.
 =#
-function simulate_vehicle_and_humans!(sim::simulator, vehicle_steering_angle::Float64, vehicle_speed::Float64, current_time::Float64, time_duration::Float64, exp_details::experiment_details)
+function simulate_vehicle_and_humans!(sim::simulator, vehicle_steering_angle::Float64, vehicle_speed::Float64, current_time::Float64, time_duration::Float64,
+                            exp_details::experiment_details, output::Output)
 
     current_sim_obj = sim
     number_steps_in_sim = Int64(time_duration/current_sim_obj.one_time_step)
@@ -244,26 +395,100 @@ function simulate_vehicle_and_humans!(sim::simulator, vehicle_steering_angle::Fl
         #Get new vehicle object and new vehicle_params object
         new_veh_obj = propogate_vehicle(current_sim_obj.vehicle, current_sim_obj.vehicle_params, vehicle_steering_angle, vehicle_speed, current_sim_obj.one_time_step)
         new_vehicle_parameters = copy(current_sim_obj.vehicle_params)
+        new_humans,new_humans_params = propogated_humans,copy(current_sim_obj.humans_params)
+        # new_humans, new_humans_params = respawn_humans(propogated_humans,current_sim_obj.humans_params,exp_details,output)
 
         #Get new vehicle sensor data
-        new_sensor_data_obj = get_vehicle_sensor_data(new_veh_obj,propogated_humans,current_sim_obj.humans_params,
-                            current_sim_obj.vehicle_sensor_data,exp_details,CURRENT_TIME_VALUE)
+        new_sensor_data_obj = get_vehicle_sensor_data(new_veh_obj,new_humans,new_humans_params,current_sim_obj.vehicle_sensor_data,exp_details,CURRENT_TIME_VALUE)
 
         #Create a new simulator object
-        new_sim_object = simulator(current_sim_obj.env, new_veh_obj, new_vehicle_parameters, new_sensor_data_obj, propogated_humans, current_sim_obj.humans_params, current_sim_obj.one_time_step)
+        new_sim_object = simulator(current_sim_obj.env, new_veh_obj, new_vehicle_parameters, new_sensor_data_obj, new_humans, new_humans_params, current_sim_obj.one_time_step)
 
         #Check if this is a risky scenario
         num_risks_this_time_step = get_num_risks(new_veh_obj, new_vehicle_parameters, new_sensor_data_obj.lidar_data, exp_details.max_risk_distance)
         if(num_risks_this_time_step!=0)
-            exp_details.number_risky_scenarios += num_risks_this_time_step
-            exp_details.risky_scenarios[CURRENT_TIME_VALUE] = new_sim_object
+            output.number_risky_scenarios += num_risks_this_time_step
+            output.risky_scenarios[CURRENT_TIME_VALUE] = new_sim_object
         end
 
-        exp_details.sim_objects[CURRENT_TIME_VALUE] = new_sim_object
-        exp_details.nearby_humans[CURRENT_TIME_VALUE] = copy(exp_details.nearby_humans[current_time])
+        output.sim_objects[CURRENT_TIME_VALUE] = new_sim_object
+        output.nearby_humans[CURRENT_TIME_VALUE] = copy(output.nearby_humans[current_time])
         current_sim_obj = new_sim_object
     end
     return current_sim_obj
+end
+
+function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, output)
+
+    current_time_value = 0.0
+    current_vehicle_speed = 0.0
+    current_vehicle_steering_angle = 0.0
+    current_action = action_extended_space_POMDP_planner(0.0,0.0)
+    output.vehicle_actions[current_time_value] = current_action
+    output.sim_objects[current_time_value] = current_sim_obj
+    output.nearby_humans[current_time_value] = nearby_humans(human_state[], Int64[], belief_over_human_goals[])
+
+    # try
+    while(!stop_simulation!(current_sim_obj,current_time_value,exp_details,output))
+
+        println("Current time value : ", current_time_value)
+        println("Current Vehicle State: ", current_sim_obj.vehicle)
+        println("Action to be executed now : ", current_action)
+        #=
+        Simulate for (one_time_step - pomdp_planning_time - buffer_time) seconds
+        =#
+        time_duration_until_planning_begins = exp_details.one_time_step - (pomdp_details.planning_time + exp_details.buffer_time)
+        current_sim_obj = simulate_vehicle_and_humans!(current_sim_obj, current_vehicle_steering_angle, current_vehicle_speed,
+                                                current_time_value, time_duration_until_planning_begins, exp_details, output)
+        current_time_value += time_duration_until_planning_begins
+
+        #=
+        Take the current status of the environment.
+        Predict the vehicle's future position using current_action after (pomdp_planning_time + buffer_time) seconds.
+        Initialize scenarios with sampled human goals and predicted human positions after (pomdp_planning_time + buffer_time) seconds.
+        Solve the POMDP and find the action.
+        =#
+        time_duration_until_pomdp_action_determined = pomdp_details.planning_time + exp_details.buffer_time
+        predicted_vehicle_state = propogate_vehicle(current_sim_obj.vehicle, current_sim_obj.vehicle_params,
+                                            current_vehicle_steering_angle, current_vehicle_speed, time_duration_until_pomdp_action_determined)
+        # println(predicted_vehicle_state)
+        modified_vehicle_params = modify_vehicle_params(current_sim_obj.vehicle_params)
+        nearby_humans = get_nearby_humans(current_sim_obj,pomdp_details.num_nearby_humans,pomdp_details.min_safe_distance_from_human,
+                                                pomdp_details.cone_half_angle)
+        b = tree_search_scenario_parameters(predicted_vehicle_state.x,predicted_vehicle_state.y,predicted_vehicle_state.theta,predicted_vehicle_state.v,
+                            modified_vehicle_params, exp_details.human_goal_locations, nearby_humans.position_data, nearby_humans.belief,
+                            current_sim_obj.env.length,current_sim_obj.env.breadth,time_duration_until_pomdp_action_determined)
+        next_action, info = action_info(planner, b)
+        output.despot_trees[current_time_value] = info
+        output.nearby_humans[current_time_value] = nearby_humans
+        output.b_root[current_time_value] = b
+
+        #=
+        Simulate for (pomdp_planning_time + buffer_time) seconds
+        =#
+        time_duration_until_next_action_is_applied =  pomdp_details.planning_time + exp_details.buffer_time
+        current_sim_obj = simulate_vehicle_and_humans!(current_sim_obj, current_vehicle_steering_angle, current_vehicle_speed,
+                                                current_time_value, time_duration_until_next_action_is_applied, exp_details, output)
+
+        current_vehicle_speed = clamp(current_vehicle_speed+next_action.delta_speed, 0.0, pomdp_details.max_vehicle_speed)
+        current_vehicle_steering_angle = get_steering_angle(current_sim_obj.vehicle_params.L, next_action.delta_heading_angle, current_vehicle_speed, exp_details.one_time_step)
+        current_action = next_action
+        current_time_value += time_duration_until_next_action_is_applied
+        #=
+        Store relevant values in exp_details
+        =#
+        output.vehicle_actions[current_time_value] = current_action
+        if(current_action.delta_speed == -10.0)
+            output.number_sudden_stops += 1
+        end
+    end
+
+    # catch e
+    #     println("\n Things failed during the simulation. \n The error message is : \n ")
+    #     println(e)
+    #     return exp_details
+    # end
+    output.time_taken = current_time_value
 end
 
 

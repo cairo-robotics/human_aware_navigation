@@ -40,6 +40,8 @@ struct extended_space_POMDP_planner <: POMDPs.POMDP{state_extended_space_POMDP_p
     one_time_step::Float64
     num_segments_in_one_time_step::Int64
     observation_discretization_length::Float64
+    d_near::Float64
+    d_far::Float64
     world::experiment_environment
 end
 
@@ -64,6 +66,9 @@ struct tree_search_scenario_parameters
     human_goals::Array{location,1}
     nearby_humans::Array{human_state,1}
     nearby_humans_belief::Array{belief_over_human_goals,1}
+    world_length::Float64
+    world_breadth::Float64
+    time_duration::Float64
 end
 
 function Base.rand(rng::AbstractRNG, scenario_params::tree_search_scenario_parameters)
@@ -71,7 +76,7 @@ function Base.rand(rng::AbstractRNG, scenario_params::tree_search_scenario_param
     for i in 1:length(scenario_params.nearby_humans)
         sampled_goal = Distributions.rand(rng, SparseCat(scenario_params.human_goals,scenario_params.nearby_humans_belief[i].pdf))
         new_human = human_state(scenario_params.nearby_humans[i].x,scenario_params.nearby_humans[i].y,scenario_params.nearby_humans[i].v,sampled_goal)
-        new_human = update_human_position(new_human,50.0,50.0,0.5,rng)
+        new_human = update_human_position(new_human,scenario_params.world_length,scenario_params.world_breadth,scenario_params.time_duration,rng)
         push!(humans, new_human)
     end
     return state_extended_space_POMDP_planner(scenario_params.vehicle_x,scenario_params.vehicle_y,scenario_params.vehicle_theta,
@@ -276,7 +281,7 @@ function POMDPs.gen(m::extended_space_POMDP_planner, s, a, rng)
         vehicle_reached_goal_flag = true
         new_vehicle_speed = clamp(s.vehicle_v + a.delta_speed, 0.0, m.max_vehicle_speed)
         push!(observed_positions, location(-25.0,-25.0))
-    elseif( (s.vehicle_x>m.world.length) || (s.vehicle_y>m.world.breadth) || (s.vehicle_x<0.0) || (s.vehicle_y<0.0) )
+    elseif( s.vehicle_x<0.0+s.vehicle_L || s.vehicle_y<0.0+s.vehicle_L || s.vehicle_x>m.world.length-s.vehicle_L || s.vehicle_y>m.world.breadth-s.vehicle_L )
         #print("Running into wall")
         new_vehicle_position = (-100.0, -100.0, -100.0)
         collision_with_obstacle_flag = true
@@ -442,7 +447,7 @@ function time_to_goal_pomdp_planning(s::state_extended_space_POMDP_planner,max_v
     return floor(vehicle_distance_to_goal/max_vehicle_speed)
 end
 
-function calculate_upper_bound_pomdp_planning(m::extended_space_POMDP_planner, b)
+function calculate_upper_bound(m::extended_space_POMDP_planner, b)
 
     #@show lbound(DefaultPolicyLB(FunctionPolicy(calculate_lower_bound_policy_pomdp_planning_2D_action_space), max_depth=100, final_value=reward_to_be_awarded_at_max_depth_in_lower_bound_policy_rollout),m , b)
     value_sum = 0.0
@@ -468,12 +473,12 @@ end
 
 #************************************************************************************************
 #Lower bound policy function for DESPOT
-function calculate_lower_bound_pomdp_planning(m::extended_space_POMDP_planner,b)
+function calculate_lower_bound(m::extended_space_POMDP_planner,b)
     #Implement a reactive controller for your lower bound
     speed_change_to_be_returned = 1.0
     delta_angle = 0.0
-    d_far_threshold = 6.0
-    d_near_threshold = 4.0
+    d_far_threshold = 1.0
+    d_near_threshold = 0.5
     #This bool is also used to check if all the states in the belief are terminal or not.
     first_execution_flag = true
 
@@ -502,11 +507,11 @@ function calculate_lower_bound_pomdp_planning(m::extended_space_POMDP_planner,b)
                     if(euclidean_distance < dist_to_closest_human)
                         dist_to_closest_human = euclidean_distance
                     end
-                    if(dist_to_closest_human < d_near_threshold)
+                    if(dist_to_closest_human < m.d_near)
                         return action_extended_space_POMDP_planner(delta_angle,-1.0)
                     end
                 end
-                if(dist_to_closest_human > d_far_threshold)
+                if(dist_to_closest_human > m.d_far)
                     chosen_acceleration = 1.0
                 else
                     chosen_acceleration = 0.0
@@ -536,7 +541,7 @@ function calculate_lower_bound_pomdp_planning(m::extended_space_POMDP_planner,b)
     return action_extended_space_POMDP_planner(delta_angle,0.0)
 end
 
-function reward_to_be_awarded_at_max_depth_in_lower_bound_policy_rollout(m,b)
+function reward_at_max_depth_lower_bound_policy_rollout(m,b)
     #print("HI")
     # #sleep(5)
     # print(b.depth)
@@ -638,13 +643,18 @@ function get_actions(m::extended_space_POMDP_planner,b)
             action_extended_space_POMDP_planner(0.0,-1.0),action_extended_space_POMDP_planner(0.0,0.0),action_extended_space_POMDP_planner(0.0,1.0),
             action_extended_space_POMDP_planner(pi/12,0.0),action_extended_space_POMDP_planner(pi/6,0.0),action_extended_space_POMDP_planner(pi/4,0.0),
             action_extended_space_POMDP_planner(-10.0,-10.0)]
-            # return [(-pi/4,0.0),(-pi/6,0.0),(-pi/12,0.0),(0.0,-2.0),(0.0,0.0),(0.0,2.0),(pi/12,0.0),(pi/6,0.0),(pi/4,0.0),(-10.0,-10.0)]
+            # return [action_extended_space_POMDP_planner(-pi/4,0.0),action_extended_space_POMDP_planner(-pi/6,0.0),action_extended_space_POMDP_planner(-pi/12,0.0),
+            # action_extended_space_POMDP_planner(0.0,-1.0),action_extended_space_POMDP_planner(0.0,0.0),action_extended_space_POMDP_planner(0.0,1.0),
+            # action_extended_space_POMDP_planner(pi/12,0.0),action_extended_space_POMDP_planner(pi/6,0.0),action_extended_space_POMDP_planner(pi/4,0.0)]
         else
             return [action_extended_space_POMDP_planner(delta_angle, 0.0),action_extended_space_POMDP_planner(-pi/4,0.0),action_extended_space_POMDP_planner(-pi/6,0.0),
             action_extended_space_POMDP_planner(-pi/12,0.0),action_extended_space_POMDP_planner(0.0,-1.0),action_extended_space_POMDP_planner(0.0,0.0),
             action_extended_space_POMDP_planner(0.0,1.0),action_extended_space_POMDP_planner(pi/12,0.0),action_extended_space_POMDP_planner(pi/6,0.0),
             action_extended_space_POMDP_planner(pi/4,0.0),action_extended_space_POMDP_planner(-10.0,-10.0)]
-            # return [(delta_angle, 0.0),(-pi/4,0.0),(-pi/6,0.0),(-pi/12,0.0),(0.0,-2.0),(0.0,0.0),(0.0,2.0),(pi/12,0.0),(pi/6,0.0),(pi/4,0.0),(-10.0,-10.0)]
+            # return [action_extended_space_POMDP_planner(delta_angle, 0.0),action_extended_space_POMDP_planner(-pi/4,0.0),action_extended_space_POMDP_planner(-pi/6,0.0),
+            # action_extended_space_POMDP_planner(-pi/12,0.0),action_extended_space_POMDP_planner(0.0,-1.0),action_extended_space_POMDP_planner(0.0,0.0),
+            # action_extended_space_POMDP_planner(0.0,1.0),action_extended_space_POMDP_planner(pi/12,0.0),action_extended_space_POMDP_planner(pi/6,0.0),
+            # action_extended_space_POMDP_planner(pi/4,0.0)]
         end
         # return [(delta_angle, 1.0),(-pi/4,0.0),(-pi/6,0.0),(-pi/12,0.0),(0.0,-1.0),(0.0,0.0),(0.0,1.0),(pi/12,1.0),(pi/6,0.0),(pi/4,0.0),(-10.0,-10.0)]
         # return [(delta_angle, 1.0),(-pi/4,0.0),(-pi/6,0.0),(-pi/12,0.0),(0.0,-1.0),(0.0,0.0),(0.0,1.0),(pi/12,1.0),(pi/6,0.0),(pi/4,0.0),(-10.0,-10.0)]

@@ -62,7 +62,6 @@ function update_belief(old_sensor_data::vehicle_sensor, new_human_states, new_id
     return new_belief
 end
 
-
 function update_belief(current_belief::Array{belief_over_human_goals,1},all_goals_list,old_lidar_data,new_lidar_data)
     #@show("INSIDE",current_belief, old_cart_lidar_data, new_cart_lidar_data,"*****")
     new_belief = Array{belief_over_human_goals,1}()
