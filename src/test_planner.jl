@@ -1,12 +1,41 @@
-time_value = 3.5
-e,p = get_details_from_input_parameters(aspen_input)
-cso = exp_details.sim_objects[time_value]
-a = exp_details.vehicle_actions[time_value]
-cvspeed = clamp(cso.vehicle.v+a.delta_speed, 0.0, p.max_vehicle_speed)
-cv_sa = get_steering_angle(cso.vehicle_params.L, a.delta_heading_angle, cvspeed, exp_details.one_time_step)
-td= exp_details.buffer_time+p.planning_time
-pvs = propogate_vehicle(cso.vehicle, cso.vehicle_params, cv_sa, cvspeed, td)
-nbh = exp_details.nearby_humans[time_value]
-b = tree_search_scenario_parameters(pvs.x,pvs.y,pvs.theta,pvs.v,cso.vehicle_params, exp_details.human_goal_locations, nbh.position_data, nbh.belief,
-                    cso.env.length,cso.env.breadth,td)
-next_action, info = action_info(pomdp_planner, b)
+t = 6
+na, info = action_info(pomdp_planner, output.b_root[t]); println(na)
+
+s = rand(MersenneTwister(1), output.b_root[t])
+sp,o,r = POMDPs.gen(extended_space_pomdp, s, debug_calculate_lower_bound(extended_space_pomdp,s), MersenneTwister(1))
+
+s = rand(MersenneTwister(1), output.b_root[t])
+p=[]
+for i in 1:10
+    println(i)
+    println("Current vehicle pos: ", (s.vehicle_x,s.vehicle_y,s.vehicle_theta*180/pi,s.vehicle_v) )
+    a = debug_calculate_lower_bound(extended_space_pomdp,s)
+    sp, o,r = genfn(extended_space_pomdp, s, a, MersenneTwister(1))
+    println("Action: ", (a.delta_heading_angle*180/pi,a.delta_speed))
+    println("New Vehicle pos: ", (sp.vehicle_x,sp.vehicle_y,sp.vehicle_theta*180/pi,sp.vehicle_v))
+    println("Reward: ",r)
+    println("****************************")
+    push!(p,(s,a,sp))
+    s = sp
+end
+
+
+# root_scenarios = [i=>rand(MersenneTwister(1), output.b_root[t]) for i in 1:5]
+s = rand(MersenneTwister(1), output.b_root[t]);
+root_scenarios = [i=>s for i in 1:100];
+belief = ScenarioBelief(root_scenarios,pomdp_planner.rs, 1, missing);
+p=[]
+for i in 1:30
+    println(i)
+    println("Current vehicle pos: ", (s.vehicle_x,s.vehicle_y,s.vehicle_theta*180/pi,s.vehicle_v) )
+    root_scenarios = [i=>s for i in 1:5]
+    belief = ScenarioBelief(root_scenarios,pomdp_planner.rs, 1, missing)
+    a = calculate_lower_bound(extended_space_pomdp,belief)
+    sp, o,r = genfn(extended_space_pomdp, s, a, MersenneTwister(1))
+    println("Action: ", (a.delta_heading_angle*180/pi,a.delta_speed))
+    println("New Vehicle pos: ", (sp.vehicle_x,sp.vehicle_y,sp.vehicle_theta*180/pi,sp.vehicle_v))
+    println("Reward: ",r)
+    println("****************************")
+    push!(p,(s,a,sp))
+    s = sp
+end

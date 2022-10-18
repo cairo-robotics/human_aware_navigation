@@ -1,8 +1,8 @@
-aspen =  input_parameters(
-    MersenneTwister(111), #=rng::AbstractRNG=#
+aspen =  InputParameters(
+    MersenneTwister(), #=rng::AbstractRNG=#
     5.518, #=env_length::Float64=#
     11.036, #=env_breadth::Float64=#
-    obstacle_location[], #=obstacles::Array{obstacle_location,1}=#
+    ObstacleLocation[], #=obstacles::Array{obstacle_location,1}=#
     4, #=num_humans::Int64=#
     1.0, #=human_start_v::Float64=#
     2.75, #=veh_start_x::Float64=#
@@ -10,7 +10,7 @@ aspen =  input_parameters(
     0.0, #=veh_start_theta::Float64=#
     0.0, #=veh_start_v::Float64=#
     2.759, #=veh_goal_x::Float64=#
-    11.0, #=veh_goal_y::Float64=#
+    10.5, #=veh_goal_y::Float64=#
     0.3, #=veh_L::Float64=#
     3.0, #=veh_max_speed::Float64=#
     30.0, #=lidar_range::Float64=#
@@ -35,5 +35,5 @@ aspen =  input_parameters(
     0.1, #=simulator_time_step::Float64=#
     0.2, #=update_sensor_data_time_interval::Float64=#
     0.2, #=buffer_time::Float64=#
-    200.0 #=MAX_TIME_LIMIT::Float64=#
+    30.0 #=MAX_TIME_LIMIT::Float64=#
 )

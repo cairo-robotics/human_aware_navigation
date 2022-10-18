@@ -1,6 +1,6 @@
 function get_details_from_input_parameters(obj)
 
-    pomdp_details = pomdp_planning_details(
+    pomdp_details = POMPDPlanningDetails(
         obj.num_nearby_humans, #=num_nearby_humans::Int64=#
         obj.cone_half_angle, #=cone_half_angle::Float64=#
         obj.min_safe_distance_from_human, #=min_safe_distance_from_human::Float64=#
@@ -21,7 +21,7 @@ function get_details_from_input_parameters(obj)
         obj.one_time_step #=one_time_step::Float64=#
     )
 
-    exp_details = experiment_details(
+    exp_details = ExperimentDetails(
         obj.rng, #=user_defined_rng::AbstractRNG=#
         obj.num_humans_env, #=num_humans_env::Int64=#
         obj.human_start_v, #=human_start_v::Float64=#
@@ -34,8 +34,8 @@ function get_details_from_input_parameters(obj)
         obj.max_risk_distance, #=max_risk_distance::Float64=#
         obj.update_sensor_data_time_interval, #=update_sensor_data_time_interval::Float64=#
         obj.buffer_time, #=buffer_time::Float64=#
-        location[], #=human_goal_locations::Array{location,1}=#
-        experiment_environment(0.0,0.0,obstacle_location[])#=env::experiment_environment=#
+        Location[], #=human_goal_locations::Array{location,1}=#
+        ExperimentEnvironment(0.0,0.0,ObstacleLocation[])#=env::experiment_environment=#
     )
 
     output = Output(

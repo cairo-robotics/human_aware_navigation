@@ -21,8 +21,8 @@ function is_human_present_in_lidar_data(human,old_lidar_data)
     return -1
 end
 
-function update_belief(old_sensor_data::vehicle_sensor, new_human_states, new_ids, all_goals_list)
-    new_belief = Array{belief_over_human_goals,1}()
+function update_belief(old_sensor_data::VehicleSensor, new_human_states, new_ids, all_goals_list)
+    new_belief = Array{HumanGoalsBelief,1}()
     old_human_states = old_sensor_data.lidar_data
     old_ids = old_sensor_data.ids
     old_belief = old_sensor_data.belief
@@ -38,7 +38,7 @@ function update_belief(old_sensor_data::vehicle_sensor, new_human_states, new_id
         id_tbf = new_ids[i]
         id_position_in_old_ids = findall(x->x==id_tbf, old_ids)
         if(length(id_position_in_old_ids) == 0)
-            belief_new_human = belief_over_human_goals(repeat([1/num_goals], num_goals))
+            belief_new_human = HumanGoalsBelief(repeat([1/num_goals], num_goals))
             push!(new_belief,belief_new_human)
         else
             required_index = id_position_in_old_ids[1]
@@ -56,15 +56,15 @@ function update_belief(old_sensor_data::vehicle_sensor, new_human_states, new_id
             updated_belief_for_current_human = required_belief.*human_prob_over_goals
             updated_belief_for_current_human = updated_belief_for_current_human/sum(updated_belief_for_current_human)
             #@show(updated_belief_for_current_human)
-            push!(new_belief,belief_over_human_goals(updated_belief_for_current_human))
+            push!(new_belief,HumanGoalsBelief(updated_belief_for_current_human))
         end
     end
     return new_belief
 end
 
-function update_belief(current_belief::Array{belief_over_human_goals,1},all_goals_list,old_lidar_data,new_lidar_data)
+function update_belief(current_belief::Array{HumanGoalsBelief,1},all_goals_list,old_lidar_data,new_lidar_data)
     #@show("INSIDE",current_belief, old_cart_lidar_data, new_cart_lidar_data,"*****")
-    new_belief = Array{belief_over_human_goals,1}()
+    new_belief = Array{HumanGoalsBelief,1}()
     human_positions_old = old_lidar_data[1]
     index_list_old = old_lidar_data[2]
     human_positions_new = new_lidar_data[1]
