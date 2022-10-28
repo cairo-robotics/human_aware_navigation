@@ -1,6 +1,7 @@
-function get_details_from_input_parameters(obj)
+# function get_details_from_input_parameters(obj)
 
-    pomdp_details = POMPDPlanningDetails(
+function POMPDPlanningDetails(obj)
+    return POMPDPlanningDetails(
         obj.num_nearby_humans, #=num_nearby_humans::Int64=#
         obj.cone_half_angle, #=cone_half_angle::Float64=#
         obj.min_safe_distance_from_human, #=min_safe_distance_from_human::Float64=#
@@ -20,9 +21,12 @@ function get_details_from_input_parameters(obj)
         obj.pomdp_discount_factor, #=discount_factor::Float64=#
         obj.one_time_step #=one_time_step::Float64=#
     )
+end
 
-    exp_details = ExperimentDetails(
+function ExperimentDetails(obj)
+    return ExperimentDetails(
         obj.rng, #=user_defined_rng::AbstractRNG=#
+        obj.veh_path_planning_v, #=veh_path_planning_v::Float64=#
         obj.num_humans_env, #=num_humans_env::Int64=#
         obj.human_start_v, #=human_start_v::Float64=#
         obj.one_time_step, #=one_time_step::Float64=#
@@ -37,8 +41,10 @@ function get_details_from_input_parameters(obj)
         Location[], #=human_goal_locations::Array{location,1}=#
         ExperimentEnvironment(0.0,0.0,ObstacleLocation[])#=env::experiment_environment=#
     )
+end
 
-    output = Output(
+function OutputObj()
+    return Output(
         0, #=number_sudden_stops::Int64=#
         0, #=number_risky_scenarios::Int64=#
         0.0, #=time_taken::Float64=#
@@ -53,6 +59,4 @@ function get_details_from_input_parameters(obj)
         OrderedDict(), #=sim_objects::OrderedDict=#
         OrderedDict(), #=risky_scenarios::OrderedDict=#
     )
-
-    return exp_details, pomdp_details, output
 end

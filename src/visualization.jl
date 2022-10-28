@@ -7,10 +7,11 @@ function circleShape(h,k,r)
     h .+ r*sin.(theta), k .+ r*cos.(theta)
 end
 
-function display_sim(env,vehicle,vehicle_params,nearby_humans,sensor_data,time_value,exp_details)
+function get_plot(env,vehicle,vehicle_params,nearby_humans,sensor_data,time_value,exp_details)
 
     plot_size = 1000; #number of pixels
-    p = plot(legend=false,grid=false,axis=([], false))
+    p = plot(legend=false,grid=false)
+    # p = plot(legend=false,grid=false,axis=([], false))
 
     #Plot the rectangular environment
     plot!([0.0, env.length],[0.0,0.0], color="grey", lw=2)
@@ -27,7 +28,9 @@ function display_sim(env,vehicle,vehicle_params,nearby_humans,sensor_data,time_v
 
     #Plot Obstacles
     for obs in env.obstacles
-        scatter!([obs.x],[obs.y],color="black",shape=:circle,msize=plot_size*env.obstacles[i].r/env.length)
+        plot!(circleShape(obs.x,obs.y,obs.r), lw=0.5, linecolor = :black,
+                                            legend=false, fillalpha=1.0, aspect_ratio=1,c= :black, seriestype = [:shape,])
+        # scatter!([obs.x],[obs.y],color="black",shape=:circle,msize=plot_size*obs.r/env.length)
     end
 
     #Plot nearby humans in red
@@ -58,7 +61,7 @@ function display_sim(env,vehicle,vehicle_params,nearby_humans,sensor_data,time_v
     end
 
     #Plot Vehicle
-    scatter!([vehicle.x], [vehicle.y], shape=:circle, color="grey")
+    # scatter!([vehicle.x], [vehicle.y], shape=:circle, color="grey")
     plot!(circleShape(vehicle.x,vehicle.y,vehicle_params.L), lw=0.5, linecolor = :black,
                             legend=false, fillalpha=0.2, aspect_ratio=1,c= :grey, seriestype = [:shape,])
     quiver!([vehicle.x],[vehicle.y],quiver=([cos(vehicle.theta)],[sin(vehicle.theta)]), color="grey")
@@ -71,20 +74,27 @@ function display_sim(env,vehicle,vehicle_params,nearby_humans,sensor_data,time_v
     #Add the time value to the plot
     annotate!(env.length/2, env.breadth+0.5, text(string(round(time_value,digits=1)), :purple, :right, 20))
     plot!(size=(plot_size,plot_size))
-    display(p)
+    # display(p)
+    return p
 end
 #=
 t = 11
-display_sim( output.sim_objects[t].env, output.sim_objects[t].vehicle, output.sim_objects[t].vehicle_params, output.nearby_humans[t], output.sim_objects[t].vehicle_sensor_data, t, exp_details)
+p = get_plot( output.sim_objects[t].env, output.sim_objects[t].vehicle, output.sim_objects[t].vehicle_params, output.nearby_humans[t], output.sim_objects[t].vehicle_sensor_data, t, exp_details)
+display(p)
 =#
 
-
-#Function to display the environment
-function observe(output,exp_details,time_value)
+#Function to display the environment, vehicle and humans
+function observe(output,path_planning_details,exp_details,time_value)
     e = output.sim_objects[time_value].env
     v = output.sim_objects[time_value].vehicle
     vp = output.sim_objects[time_value].vehicle_params
     nbh = output.nearby_humans[time_value]
     sd = output.sim_objects[time_value].vehicle_sensor_data
-    display_sim(e,v,vp,nbh,sd,time_value,exp_details)
+    p = get_plot(e,v,vp,nbh,sd,time_value,exp_details)
+    if(hasfield(typeof(vp),:controls_sequence))
+        vehicle_path_x, vehicle_path_y, vehicle_path_theta  = get_vehicle_trajectory(v,vp,time_value,path_planning_details,exp_details)
+        plot!(vehicle_path_x,vehicle_path_y,"grey")
+    end
+    # annotate!(env.length/2, env.breadth/2, text("HG", :purple, :right, 20))
+    display(p)
 end

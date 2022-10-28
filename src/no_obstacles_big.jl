@@ -13,6 +13,7 @@ scenario1_big =  InputParameters(
     75.0, #=veh_goal_y::Float64=#
     0.3, #=veh_L::Float64=#
     3.0, #=veh_max_speed::Float64=#
+    1.0, #=veh_path_planning_v::Float64=#    
     30.0, #=lidar_range::Float64=#
     6, #=num_nearby_humans::Int64=#
     2*pi/3, #=cone_half_angle::Float64=#

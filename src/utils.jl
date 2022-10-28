@@ -22,6 +22,22 @@ function wrap_between_0_and_2Pi(theta)
    return mod(theta,2*pi)
 end
 
+function in_obstacle(px,py,obstacle,padding=0.0)
+    return is_within_range(px,py,obstacle.x,obstacle.y,obstacle.r+padding)
+end
+
+function find_max_element(some_array, len)
+    max_element::Float64 = -Inf
+    index::Int64 = 0
+    for i in 1:len
+        if(max_element<some_array[i])
+            max_element = some_array[i]
+            index = i
+        end
+    end
+    return (max_element,index)
+end
+
 function get_heading_angle(human_x, human_y, vehicle_x, vehicle_y)
 
     #First Quadrant
@@ -91,18 +107,64 @@ function get_nearest_n_pedestrians_hybrid_astar_search(world,current_belief,n,cl
     return nearest_n_pedestrians
 end
 
-function get_intermediate_point_human_trajectory(start_x, start_y, end_x, end_y, discrete_time)
-    tbr_x = start_x + discrete_time*(end_x - start_x)
-    tbr_y = start_y + discrete_time*(end_y - start_y)
-    return tbr_x,tbr_y
-end
-
 function get_steering_angle(vehicle_length, delta_angle, vehicle_speed, time_duration)
     if(vehicle_speed==0.0 || delta_angle==0.0)
         return 0.0
     else
         return atan((vehicle_length*delta_angle)/(vehicle_speed*time_duration))
     end
+end
+
+function move_vehicle(vehicle_x,vehicle_y,vehicle_theta,vehicle_L,steering_angle,vehicle_speed,time_duration)
+    if(vehicle_speed == 0.0)
+        return (vehicle_x,vehicle_y,vehicle_theta)
+    end
+    if(steering_angle == 0.0)
+        new_theta = vehicle_theta
+        new_x = vehicle_x + vehicle_speed*cos(new_theta)*(time_duration)
+        new_y = vehicle_y + vehicle_speed*sin(new_theta)*(time_duration)
+    else
+        new_theta = vehicle_theta + (vehicle_speed * tan(steering_angle) * (time_duration) / vehicle_L)
+        new_theta = wrap_between_0_and_2Pi(new_theta)
+        new_x = vehicle_x + ((vehicle_L / tan(steering_angle)) * (sin(new_theta) - sin(vehicle_theta)))
+        new_y = vehicle_y + ((vehicle_L / tan(steering_angle)) * (cos(vehicle_theta) - cos(new_theta)))
+    end
+    return (new_x,new_y,new_theta)
+end
+
+function get_vehicle_trajectory(vehicle,vehicle_params,time_value,planning_details,exp_details)
+
+    current_x,current_y,current_theta = vehicle.x,vehicle.y,vehicle.theta
+    vehicle_path_x, vehicle_path_y, vehicle_path_theta = Float64[current_x],Float64[current_y],Float64[current_theta]
+    current_time_step_start = floor(time_value/exp_details.one_time_step)*planning_details.one_time_step
+    current_time_step_end = current_time_step_start + planning_details.one_time_step
+    num_steps_first_interval = Int64( (current_time_step_end - time_value)/exp_details.simulator_time_step )
+    num_steps_remaining_intervals = Int64(planning_details.one_time_step/exp_details.simulator_time_step)
+
+    for i in 1:num_steps_first_interval
+        steering_angle = vehicle_params.controls_sequence[1]
+        # steering_angle = get_steering_angle(vehicle_params.L,action,planning_details.veh_path_planning_v,planning_details.one_time_step)
+        new_x,new_y,new_theta = get_new_vehicle_position(current_x,current_y,current_theta,vehicle_params.L,steering_angle,planning_details.veh_path_planning_v,exp_details.simulator_time_step)
+        push!(vehicle_path_x,new_x)
+        push!(vehicle_path_y,new_y)
+        push!(vehicle_path_theta,new_theta)
+        current_x,current_y,current_theta = new_x,new_y,new_theta
+    end
+
+    for steering_angle in vehicle_params.controls_sequence[2:end]
+        # steering_angle = get_steering_angle(vehicle_params.L,action,planning_details.veh_path_planning_v,planning_details.one_time_step)
+        for i in 1:num_steps_remaining_intervals
+            new_x,new_y,new_theta = get_new_vehicle_position(current_x,current_y,current_theta,vehicle_params.L,
+                                            steering_angle,planning_details.veh_path_planning_v,exp_details.simulator_time_step)
+            push!(vehicle_path_x,new_x)
+            push!(vehicle_path_y,new_y)
+            push!(vehicle_path_theta,new_theta)
+            current_x,current_y,current_theta = new_x,new_y,new_theta
+            # println(current_x, " ", current_y, " ", current_theta," ",action)
+        end
+    end
+
+    return vehicle_path_x,vehicle_path_y,vehicle_path_theta
 end
 
 function write_and_print(io::IOStream, string_to_be_written_and_printed::String)
@@ -151,15 +213,6 @@ function write_experiment_details_to_file(rand_noise_generator_seed_for_env,rand
     save(filename, d)
 end
 
-function is_there_immediate_collision_with_pedestrians(world, pedestrian_distance_threshold)
-    for human in world.complete_cart_lidar_data
-        if( find_if_two_circles_intersect(world.cart.x, world.cart.y, world.cart.L,human.x, human.y, pedestrian_distance_threshold) )
-            return true
-        end
-    end
-    return false
-end
-
 function calculate_mean_and_variance_from_given_dict(given_dict)
     total_sum = 0.0
     total_valid_entries = 0
@@ -182,4 +235,10 @@ function calculate_mean_and_variance_from_given_dict(given_dict)
     given_dict_var = given_dict_var/(total_valid_entries-1)
 
     return given_dict_mean, given_dict_var
+end
+
+function get_human_trajectory(human)
+    path = HumanState[]
+    while()
+    end
 end

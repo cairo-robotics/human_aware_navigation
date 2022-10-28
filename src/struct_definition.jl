@@ -39,6 +39,7 @@ struct NearbyHumans
     ids::Array{Int64,1}
     belief::Array{HumanGoalsBelief,1}
 end
+# nbh = NearbyHumans(HumanState[], Int64[], HumanGoalsBelief[])
 
 struct Vehicle
     x::Float64
@@ -46,34 +47,40 @@ struct Vehicle
     theta::Float64
     v::Float64
 end
+# v = Vehicle(0.0,0.0,0.0,0.0)
 
 struct VehicleSensor
     lidar_data::Array{HumanState,1}
     ids::Array{Int64,1}
     belief::Array{HumanGoalsBelief,1}
 end
+# vsd = VehicleSensor(HumanState[], Int64[], HumanGoalsBelief[])
 
 struct VehicleParametersESPlanner
     L::Float64
     max_speed::Float64
     goal::Location
 end
+# vp_es = VehicleParametersESPlanner(0.3,3.0,Location(100.0,100.0))
 
 struct VehicleParametersLSPlanner
     L::Float64
     max_speed::Float64
     goal::Location
-    path::Array{Float64,1}
+    controls_sequence::Array{Float64,1}
 end
+# vp_ls = VehicleParametersLSPlanner(0.3,3.0,Location(100.0,100.0),Float64[])
 
 struct ExperimentEnvironment
     length::Float64
     breadth::Float64
     obstacles::Array{ObstacleLocation,1}
 end
+#e = ExperimentEnvironment(100.0,100.0,ObstacleLocation[])
 
 mutable struct ExperimentDetails
     user_defined_rng::AbstractRNG
+    veh_path_planning_v::Float64
     num_humans_env::Int64
     human_start_v::Float64
     one_time_step::Float64
@@ -87,6 +94,19 @@ mutable struct ExperimentDetails
     buffer_time::Float64
     human_goal_locations::Array{Location,1}
     env::ExperimentEnvironment
+end
+
+mutable struct PathPlanningDetails
+    num_nearby_humans::Int64
+    radius_around_uncertain_human::Float64
+    min_safe_distance_from_human::Float64
+    human_collision_cost::Float64
+    human_goals::Array{Location,1}
+    veh_path_planning_v::Float64
+    radius_around_vehicle_goal::Float64
+    lambda::Float64
+    one_time_step::Float64
+    planning_time::Float64
 end
 
 mutable struct POMPDPlanningDetails
@@ -125,6 +145,7 @@ end
     veh_goal_y::Float64 = 11.0
     veh_L::Float64 = 0.3
     veh_max_speed::Float64 = 3.0
+    veh_path_planning_v::Float64 = 1.0
     lidar_range::Float64 = 30.0
     num_nearby_humans::Int64 = 6
     cone_half_angle::Float64 = 2*pi/3

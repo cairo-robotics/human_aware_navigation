@@ -15,10 +15,6 @@ struct Simulator
     one_time_step::Float64
 end
 
-function in_obstacle(px,py,obstacle,padding=0.0)
-    return is_within_range(px,py,obstacle.x,obstacle.y,obstacle.r+padding)
-end
-
 function in_safe_area(px,py,vehicle_x,vehicle_y,world)
     for obstacle in world.obstacles
         if(in_obstacle(px,py,obstacle))
@@ -185,19 +181,7 @@ Function for moving vehicle in the environment
 Returns a vehicle struct object
 =#
 function propogate_vehicle(vehicle::Vehicle, vehicle_params::VehicleParametersESPlanner, steering_angle::Float64, speed::Float64, time_duration::Float64)
-    if(speed == 0.0)
-        return Vehicle(vehicle.x,vehicle.y,vehicle.theta,speed)
-    end
-    if(steering_angle == 0.0)
-        new_theta = vehicle.theta
-        new_x = vehicle.x + speed*cos(new_theta)*(time_duration)
-        new_y = vehicle.y + speed*sin(new_theta)*(time_duration)
-    else
-        new_theta = vehicle.theta + (speed * tan(steering_angle) * (time_duration) / vehicle_params.L)
-        new_theta = wrap_between_0_and_2Pi(new_theta)
-        new_x = vehicle.x + ((vehicle_params.L / tan(steering_angle)) * (sin(new_theta) - sin(vehicle.theta)))
-        new_y = vehicle.y + ((vehicle_params.L / tan(steering_angle)) * (cos(vehicle.theta) - cos(new_theta)))
-    end
+    new_x,new_y,new_theta =  move_vehicle(vehicle.x,vehicle.y,vehicle.theta,vehicle_params.L,steering_angle,speed,time_duration)
     return Vehicle(new_x,new_y,new_theta,speed)
 end
 
@@ -208,8 +192,8 @@ Returns a human_state struct object
 function propogate_human(human::HumanState, world::ExperimentEnvironment, one_time_step::Float64, user_defined_rng::AbstractRNG)
     #Random noise in human's motion
     scaling_factor_for_noise = 0.5  #Change this vairable to decide the amount of noise to be introduced
-    rand_num = (rand(user_defined_rng) - 0.5)*human.v*one_time_step*scaling_factor_for_noise
-    new_human_state = update_human_position(human,world.length,world.breadth,one_time_step,rand_num)
+    noise = (rand(user_defined_rng) - 0.5)*human.v*one_time_step*scaling_factor_for_noise
+    new_human_state = update_human_position(human,world.length,world.breadth,one_time_step,noise)
     return new_human_state
 end
 
@@ -415,7 +399,7 @@ function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, o
             nbh = get_nearby_humans(current_sim_obj,pomdp_details.num_nearby_humans,pomdp_details.min_safe_distance_from_human,
                                                     pomdp_details.cone_half_angle)
             b = TreeSearchScenarioParameters(predicted_vehicle_state.x,predicted_vehicle_state.y,predicted_vehicle_state.theta,predicted_vehicle_state.v,
-                                modified_vehicle_params, exp_details.human_goal_locations, nbh.position_data, nbh.belief,
+                                modified_vehicle_params, exp_details.human_goal_locations, length(nbh.position_data), nbh.position_data, nbh.belief,
                                 current_sim_obj.env.length,current_sim_obj.env.breadth,time_duration_until_pomdp_action_determined)
             output.nearby_humans[current_time_value] = nbh
             output.b_root[current_time_value] = b
@@ -431,7 +415,8 @@ function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, o
                                                 current_time_value, time_duration_until_next_action_is_applied, exp_details, output)
 
         current_vehicle_speed = clamp(current_vehicle_speed+next_action.delta_speed, 0.0, pomdp_details.max_vehicle_speed)
-        current_vehicle_steering_angle = get_steering_angle(current_sim_obj.vehicle_params.L, next_action.delta_heading_angle, current_vehicle_speed, exp_details.one_time_step)
+        # current_vehicle_steering_angle = get_steering_angle(current_sim_obj.vehicle_params.L, next_action.delta_heading_angle, current_vehicle_speed, exp_details.one_time_step)
+        current_vehicle_steering_angle = next_action.delta_heading_angle
         current_action = next_action
         current_time_value += time_duration_until_next_action_is_applied
         #=
@@ -451,73 +436,6 @@ function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, o
     output.time_taken = current_time_value
 end
 
-
-#Returns the updated belief over humans and number of risks encountered
-function simulate_cart_and_pedestrians_and_generate_gif_environments(env_right_now, current_belief,
-                                                            all_gif_environments, all_risky_scenarios, time_stamp,
-                                                            num_humans_to_care_about_while_pomdp_planning, cone_half_angle,
-                                                            lidar_range, closest_ped_dist_threshold, user_defined_rng,
-                                                            time_interval, steering_angle)
-
-    number_risks = 0
-    env_before_humans_simulated_for_first_half_time_interval = deepcopy(env_right_now)
-    num_steps_inside_simulator = 10
-    time_step_inside_simulator = time_interval / num_steps_inside_simulator
-
-    #Simulate for 0 to 0.5*time_interval
-    initial_state = [env_right_now.cart.x,env_right_now.cart.y,env_right_now.cart.theta]
-    for i in 1:Int(num_steps_inside_simulator/2)
-        extra_parameters = [env_right_now.cart.v, env_right_now.cart.L, steering_angle]
-        x,y,theta = get_intermediate_points(initial_state, time_step_inside_simulator, extra_parameters);
-        env_right_now.cart.x, env_right_now.cart.y, env_right_now.cart.theta = last(x), last(y), last(theta)
-        env_right_now.humans = move_human_for_one_time_step_in_actual_environment(env_right_now,time_step_inside_simulator,user_defined_rng)
-        env_right_now.complete_cart_lidar_data = get_lidar_data(env_right_now,lidar_range)
-        env_right_now.cart_lidar_data = get_nearest_n_pedestrians_in_cone_pomdp_planning_1D_or_2D_action_space(env_right_now.cart,
-                                                            env_right_now.complete_cart_lidar_data, num_humans_to_care_about_while_pomdp_planning,
-                                                            closest_ped_dist_threshold, cone_half_angle)
-
-        dict_key = "t="*string(time_stamp)*"_"*string(i)
-        all_gif_environments[dict_key] =  deepcopy(env_right_now)
-        if(get_count_number_of_risks(env_right_now) != 0)
-            number_risks += get_count_number_of_risks(env_right_now)
-            all_risky_scenarios[dict_key] =  deepcopy(env_right_now)
-        end
-        initial_state = [env_right_now.cart.x,env_right_now.cart.y,env_right_now.cart.theta]
-    end
-    #Update your belief after first half of the time_interval
-    updated_belief = update_belief_from_old_world_and_new_world(current_belief,env_before_humans_simulated_for_first_half_time_interval, env_right_now)
-
-    #Simulate for 0.5*time_interval to time_interval
-    env_before_humans_and_cart_simulated_for_second_half_time_interval = deepcopy(env_right_now)
-    initial_state = [env_right_now.cart.x,env_right_now.cart.y,env_right_now.cart.theta]
-    for i in Int(num_steps_inside_simulator/2)+1:num_steps_inside_simulator
-        extra_parameters = [env_right_now.cart.v, env_right_now.cart.L, steering_angle]
-        x,y,theta = get_intermediate_points(initial_state, time_step_inside_simulator, extra_parameters);
-        env_right_now.cart.x, env_right_now.cart.y, env_right_now.cart.theta = last(x), last(y), last(theta)
-        env_right_now.humans = move_human_for_one_time_step_in_actual_environment(env_right_now,time_step_inside_simulator,user_defined_rng)
-        if(i==10)
-            respawn_humans(env_right_now, user_defined_rng)
-        end
-        env_right_now.complete_cart_lidar_data = get_lidar_data(env_right_now,lidar_range)
-        env_right_now.cart_lidar_data = get_nearest_n_pedestrians_in_cone_pomdp_planning_1D_or_2D_action_space(env_right_now.cart,
-                                                            env_right_now.complete_cart_lidar_data, num_humans_to_care_about_while_pomdp_planning,
-                                                            closest_ped_dist_threshold, cone_half_angle)
-
-        dict_key = "t="*string(time_stamp)*"_"*string(i)
-        all_gif_environments[dict_key] =  deepcopy(env_right_now)
-        if(get_count_number_of_risks(env_right_now) != 0)
-            number_risks += get_count_number_of_risks(env_right_now)
-            all_risky_scenarios[dict_key] =  deepcopy(env_right_now)
-        end
-        initial_state = [env_right_now.cart.x,env_right_now.cart.y,env_right_now.cart.theta]
-    end
-
-    #Update your belief after the second half of time_interval
-    final_updated_belief = update_belief_from_old_world_and_new_world(updated_belief,
-                                                    env_before_humans_and_cart_simulated_for_second_half_time_interval, env_right_now)
-
-    return final_updated_belief, number_risks
-end
 
 #Functions for simulating the cart and pedestrians for the 1D planner
 
