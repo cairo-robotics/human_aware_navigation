@@ -26,7 +26,7 @@ function in_obstacle(px,py,obstacle,padding=0.0)
     return is_within_range(px,py,obstacle.x,obstacle.y,obstacle.r+padding)
 end
 
-function find_max_element(some_array, len)
+function find_maximum_element(some_array, len)
     max_element::Float64 = -Inf
     index::Int64 = 0
     for i in 1:len
@@ -79,32 +79,6 @@ function get_heading_angle(human_x, human_y, vehicle_x, vehicle_y)
     end
 
     return heading_angle
-end
-
-function get_nearest_n_pedestrians_hybrid_astar_search(world,current_belief,n,closest_ped_dist_threshold,cone_half_angle::Float64=pi/3.0)
-    nearest_n_pedestrians = Array{Tuple{human_state,human_probability_over_goals},1}()
-    priority_queue_nearest_n_pedestrians = PriorityQueue{Tuple{human_state,human_probability_over_goals},Float64}(Base.Order.Forward)
-    for i in 1:length(world.cart_lidar_data)
-        human = world.cart_lidar_data[i]
-        angle_between_cart_and_human = get_heading_angle(human.x, human.y, world.cart.x, world.cart.y)
-        difference_in_angles = abs(world.cart.theta - angle_between_cart_and_human)
-        euclidean_distance = sqrt( (world.cart.x - human.x)^2 + (world.cart.y - human.y)^2 )
-        if(difference_in_angles <= cone_half_angle)
-            priority_queue_nearest_n_pedestrians[(human,current_belief[i])] = euclidean_distance
-        elseif ( (2*pi - difference_in_angles) <= cone_half_angle )
-            priority_queue_nearest_n_pedestrians[(human,current_belief[i])] = euclidean_distance
-        elseif (euclidean_distance<=closest_ped_dist_threshold)
-            priority_queue_nearest_n_pedestrians[(human,current_belief[i])] = euclidean_distance
-        end
-    end
-    for i in 1:n
-        if(length(priority_queue_nearest_n_pedestrians) != 0)
-            push!(nearest_n_pedestrians,dequeue!(priority_queue_nearest_n_pedestrians))
-        else
-            break
-        end
-    end
-    return nearest_n_pedestrians
 end
 
 function get_steering_angle(vehicle_length, delta_angle, vehicle_speed, time_duration)
@@ -237,8 +211,74 @@ function calculate_mean_and_variance_from_given_dict(given_dict)
     return given_dict_mean, given_dict_var
 end
 
-function get_human_trajectory(human)
-    path = HumanState[]
-    while()
+#************************************************************************************************
+#Simulate human towards its goal for one time step
+
+function update_human_position(human::HumanState,world_length::Float64,world_breadth::Float64,time_step::Float64,rand_num::Float64)
+
+    #First Quadrant
+    if(human.goal.x >= human.x && human.goal.y >= human.y)
+        if(human.goal.x == human.x)
+            new_x = human.x
+            new_y = human.y + (human.v)*time_step + rand_num
+        elseif(human.goal.y == human.y)
+            new_x = human.x + (human.v)*time_step + rand_num
+            new_y = human.y
+        else
+            heading_angle = atan((human.goal.y - human.y) / (human.goal.x - human.x))
+            new_x = human.x + ((human.v)*time_step + rand_num)*cos(heading_angle)
+            new_y = human.y + ((human.v)*time_step + rand_num)*sin(heading_angle)
+        end
+    #Second Quadrant
+    elseif(human.goal.x <= human.x && human.goal.y >= human.y)
+        if(human.goal.x == human.x)
+            new_x = human.x
+            new_y = human.y + (human.v)*time_step + rand_num
+        elseif(human.goal.y == human.y)
+            new_x = human.x - (human.v)*time_step - rand_num
+            new_y = human.y
+        else
+            heading_angle = atan((human.goal.y - human.y) / (human.goal.x - human.x))
+            new_x = human.x - ((human.v)*time_step + rand_num)*cos(heading_angle)
+            new_y = human.y - ((human.v)*time_step + rand_num)*sin(heading_angle)
+        end
+    #Third Quadrant
+    elseif(human.goal.x <= human.x && human.goal.y <= human.y)
+        if(human.goal.x == human.x)
+            new_x = human.x
+            new_y = human.y - (human.v)*time_step - rand_num
+        elseif(human.goal.y == human.y)
+            new_x = human.x - (human.v)*time_step - rand_num
+            new_y = human.y
+        else
+            heading_angle = atan((human.goal.y - human.y) / (human.goal.x - human.x))
+            new_x = human.x - ((human.v)*time_step + rand_num)*cos(heading_angle)
+            new_y = human.y - ((human.v)*time_step + rand_num)*sin(heading_angle)
+        end
+    #Fourth Quadrant
+    else(human.goal.x >= human.x && human.goal.y <= human.y)
+        if(human.goal.x == human.x)
+            new_x = human.x
+            new_y = human.y - (human.v)*time_step - rand_num
+        elseif(human.goal.y == human.y)
+            new_x = human.x + (human.v)*time_step + rand_num
+            new_y = human.y
+        else
+            heading_angle = atan((human.goal.y - human.y) / (human.goal.x - human.x))
+            new_x = human.x + ((human.v)*time_step + rand_num)*cos(heading_angle)
+            new_y = human.y + ((human.v)*time_step + rand_num)*sin(heading_angle)
+        end
     end
+
+    new_x = clamp(new_x,0.0,world_length)
+    new_y = clamp(new_y,0.0,world_breadth)
+    new_human_state = HumanState(new_x,new_y,human.v,human.goal)
+
+    return new_human_state
 end
+#=
+unit_test_human = human_state(10.0,10.0,1.0,location(100.0,100.0),7.0)
+update_human_position_pomdp_planning(unit_test_human,env.length,env.breadth,1.0,1.0,MersenneTwister(1234))
+update_human_position_pomdp_planning(unit_test_human,100.0,100.0,1.0,1.0,MersenneTwister(1234))
+@code_warntype update_human_position_pomdp_planning(unit_test_human,100.0,100.0,1.0,1.0,MersenneTwister(1234))
+=#

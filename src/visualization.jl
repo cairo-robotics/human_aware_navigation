@@ -10,14 +10,19 @@ end
 function get_plot(env,vehicle,vehicle_params,nearby_humans,sensor_data,time_value,exp_details)
 
     plot_size = 1000; #number of pixels
-    p = plot(legend=false,grid=false)
-    # p = plot(legend=false,grid=false,axis=([], false))
+    boundary_padding = 0.5
+    # p = plot(legend=false,grid=false)
+    p = plot(legend=false,grid=false,axis=([], false))
 
     #Plot the rectangular environment
     plot!([0.0, env.length],[0.0,0.0], color="grey", lw=2)
     plot!([env.length, env.length],[0.0,env.breadth], color="grey", lw=2)
     plot!([0.0, env.length],[env.breadth,env.breadth], color="grey", lw=2)
     plot!([0.0, 0.0],[0.0,env.breadth], color="grey", lw=2)
+    scatter!([0.0-boundary_padding],[0.0-boundary_padding], color="white",markersize = 0)
+    scatter!([env.length+boundary_padding],[0.0-boundary_padding], color="white",markersize = 0)
+    scatter!([env.length+boundary_padding],[env.breadth+boundary_padding], color="white",markersize = 0)
+    scatter!([0.0-boundary_padding],[env.breadth+boundary_padding], color="white",markersize = 0)
 
     #Plot Human Goals
     human_goals = get_human_goals(env)
@@ -33,30 +38,26 @@ function get_plot(env,vehicle,vehicle_params,nearby_humans,sensor_data,time_valu
         # scatter!([obs.x],[obs.y],color="black",shape=:circle,msize=plot_size*obs.r/env.length)
     end
 
-    #Plot nearby humans in red
-    for human_index in 1:length(nearby_humans.position_data)
-        human = nearby_humans.position_data[human_index]
-        human_id = nearby_humans.ids[human_index]
-        scatter!([human.x],[human.y],color="red")
-        # annotate!(human.x, human.y, text(string(human_id), :purple, :right, 15))
-        plot!(circleShape(human.x,human.y,exp_details.max_risk_distance), lw=0.5, linecolor = :black,
-                                            legend=false, fillalpha=0.2, aspect_ratio=1,c= :red, seriestype = [:shape,])
-        human_heading_angle = get_heading_angle(human.goal.x, human.goal.y,human.x,human.y)
-        # quiver!([human.x],[human.y],quiver=([cos(human_heading_angle)],[sin(human_heading_angle)]), color="red")
-    end
-
-    #Plot remaining humans in lidar data in green
+    #Plot humans in lidar data (nearby humans in red, rest in blue)
     for i in 1:length(sensor_data.lidar_data)
-        green_human = sensor_data.lidar_data[i]
-        green_human_id = sensor_data.ids[i]
-        is_nearby_human = !(length(findall(x->x==green_human_id, nearby_humans.ids)) == 0)
-        human_reached_goal = (green_human.x == green_human.goal.x) && (green_human.y == green_human.goal.y)
-        if(!is_nearby_human && !human_reached_goal)
-            scatter!([green_human.x],[green_human.y],color="green")
-            plot!(circleShape(green_human.x,green_human.y,exp_details.max_risk_distance), lw=0.5, linecolor = :black,
-                                                legend=false, fillalpha=0.2, aspect_ratio=1,c= :green, seriestype = [:shape,])
-            human_heading_angle = get_heading_angle(green_human.goal.x, green_human.goal.y,green_human.x,green_human.y)
-            # quiver!([green_human.x],[green_human.y],quiver=([cos(human_heading_angle)],[sin(human_heading_angle)]), color="green")
+        human = sensor_data.lidar_data[i]
+        human_id = sensor_data.ids[i]
+        is_nearby_human = !(length(findall(x->x==human_id, nearby_humans.ids)) == 0)
+        human_reached_goal = (human.x == human.goal.x) && (human.y == human.goal.y)
+        if(is_nearby_human)
+            scatter!([human.x],[human.y],color="red")
+            # annotate!(human.x, human.y, text(string(human_id), :purple, :right, 15))
+            plot!(circleShape(human.x,human.y,exp_details.max_risk_distance), lw=0.5, linecolor = :black,
+                                                legend=false, fillalpha=0.2, aspect_ratio=1,c= :red, seriestype = [:shape,])
+            human_heading_angle = get_heading_angle(human.goal.x, human.goal.y,human.x,human.y)
+            # quiver!([human.x],[human.y],quiver=([cos(human_heading_angle)],[sin(human_heading_angle)]), color="red")
+        elseif(!human_reached_goal)
+            scatter!([human.x],[human.y],color="lightblue")
+            # annotate!(human.x, human.y, text(string(human_id), :purple, :right, 15))
+            plot!(circleShape(human.x,human.y,exp_details.max_risk_distance), lw=0.5, linecolor = :black,
+                                                legend=false, fillalpha=0.2, aspect_ratio=1,c= :lightblue, seriestype = [:shape,])
+            human_heading_angle = get_heading_angle(human.goal.x, human.goal.y,human.x,human.y)
+            # quiver!([human.x],[human.y],quiver=([cos(human_heading_angle)],[sin(human_heading_angle)]), color="green")
         end
     end
 

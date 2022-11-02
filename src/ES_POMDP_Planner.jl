@@ -1,16 +1,8 @@
-using ProfileView
-using POMDPs
-using Distributions
-using Random
-import POMDPs: initialstate_distribution, actions, gen, discount, isterminal
-using POMDPModels, POMDPSimulators, ARDESPOT, POMDPModelTools, POMDPPolicies
-using ParticleFilters
-using BenchmarkTools
-using Debugger
-using LinearAlgebra
-using DifferentialEquations
+include("pomdp_planning_utils.jl")
 
-#Struct for POMDP State
+#=
+Struct for POMDP State
+=#
 struct StateExtendedSpacePOMDP
     vehicle_x::Float64
     vehicle_y::Float64
@@ -19,16 +11,21 @@ struct StateExtendedSpacePOMDP
     nearby_humans::Array{HumanState,1}
 end
 
-#Struct for POMDP Action
+#=
+Struct for POMDP Action
+=#
 struct ActionExtendedSpacePOMDP
-    delta_heading_angle::Float64
+    steering_angle::Float64
     delta_speed::Float64
 end
 
+#=
+Struct for HJB policy
+=#
 struct HJBPolicy
-    dt::Float64
+    Dt::Float64
     value_array::Array{Float64,1}
-    optimal_action_index_array::Array{Int64,1}
+    q_value_array::Array{Array{Float64,1},1}
     get_actions::Function
     get_cost::Function
     env::Environment
@@ -36,7 +33,9 @@ struct HJBPolicy
     state_grid::StateGrid
 end
 
-#Struct for POMDP
+#=
+Struct for POMDP
+=#
 struct ExtendedSpacePOMDP{P} <: POMDPs.POMDP{StateExtendedSpacePOMDP,ActionExtendedSpacePOMDP,Array{Location,1}}
     discount_factor::Float64
     min_safe_distance_from_human::Float64
@@ -80,36 +79,9 @@ function ExtendedSpacePOMDP(pomdp_details,exp_details,vehicle_params,rollout_gui
         )
 end
 
-
-#Function to check terminal state
-function is_terminal_state(s,terminal_state)
-    if(terminal_state.x == s.vehicle_x && terminal_state.y == s.vehicle_y)
-        return true
-    else
-        return false
-    end
-end
-
-#************************************************************************************************
-#Generate Initial POMDP state based on the scenario provided by random operator.
-
-struct TreeSearchScenarioParameters
-    vehicle_x::Float64
-    vehicle_y::Float64
-    vehicle_theta::Float64
-    vehicle_v::Float64
-    vehicle_params::Union{VehicleParametersESPlanner,VehicleParametersLSPlanner}
-    human_goals::Array{Location,1}
-    num_nearby_humans::Int64
-    nearby_humans::Array{HumanState,1}
-    nearby_humans_belief::Array{HumanGoalsBelief,1}
-    world_length::Float64
-    world_breadth::Float64
-    time_duration::Float64
-end
-
-function Base.rand(rng::AbstractRNG, scenario_params::TreeSearchScenarioParameters)
+function Base.rand(rng::AbstractRNG, scenario_params::TreeSearchScenarioParameters{VehicleParametersESPlanner})
     humans = Array{HumanState,1}()
+    # return StateExtendedSpacePOMDP(scenario_params.vehicle_x,scenario_params.vehicle_y,scenario_params.vehicle_theta,scenario_params.vehicle_v,humans)
     for i in 1:scenario_params.num_nearby_humans
         sampled_goal = Distributions.rand(rng, SparseCat(scenario_params.human_goals,scenario_params.nearby_humans_belief[i].pdf))
         new_human = HumanState(scenario_params.nearby_humans[i].x,scenario_params.nearby_humans[i].y,scenario_params.nearby_humans[i].v,sampled_goal)
@@ -119,132 +91,11 @@ function Base.rand(rng::AbstractRNG, scenario_params::TreeSearchScenarioParamete
     return StateExtendedSpacePOMDP(scenario_params.vehicle_x,scenario_params.vehicle_y,scenario_params.vehicle_theta,scenario_params.vehicle_v,humans)
 end
 
-#************************************************************************************************
-#Simulate humans one step forward in POMDP planning
-
-function update_human_position(human::HumanState,world_length::Float64,world_breadth::Float64,time_step::Float64,rand_num::Float64)
-
-    # scaling_factor_for_noise = 0.2  #Change this vairable to decide the amount of noise to be introduced
-    # rand_num = (rand(rng) - 0.5)*human.v*time_step*scaling_factor_for_noise
-    #rand_num = 0.0
-    #First Quadrant
-    if(human.goal.x >= human.x && human.goal.y >= human.y)
-        if(human.goal.x == human.x)
-            new_x = human.x
-            new_y = human.y + (human.v)*time_step + rand_num
-        elseif(human.goal.y == human.y)
-            new_x = human.x + (human.v)*time_step + rand_num
-            new_y = human.y
-        else
-            heading_angle = atan((human.goal.y - human.y) / (human.goal.x - human.x))
-            new_x = human.x + ((human.v)*time_step + rand_num)*cos(heading_angle)
-            new_y = human.y + ((human.v)*time_step + rand_num)*sin(heading_angle)
-        end
-    #Second Quadrant
-    elseif(human.goal.x <= human.x && human.goal.y >= human.y)
-        if(human.goal.x == human.x)
-            new_x = human.x
-            new_y = human.y + (human.v)*time_step + rand_num
-        elseif(human.goal.y == human.y)
-            new_x = human.x - (human.v)*time_step - rand_num
-            new_y = human.y
-        else
-            heading_angle = atan((human.goal.y - human.y) / (human.goal.x - human.x))
-            new_x = human.x - ((human.v)*time_step + rand_num)*cos(heading_angle)
-            new_y = human.y - ((human.v)*time_step + rand_num)*sin(heading_angle)
-        end
-    #Third Quadrant
-    elseif(human.goal.x <= human.x && human.goal.y <= human.y)
-        if(human.goal.x == human.x)
-            new_x = human.x
-            new_y = human.y - (human.v)*time_step - rand_num
-        elseif(human.goal.y == human.y)
-            new_x = human.x - (human.v)*time_step - rand_num
-            new_y = human.y
-        else
-            heading_angle = atan((human.goal.y - human.y) / (human.goal.x - human.x))
-            new_x = human.x - ((human.v)*time_step + rand_num)*cos(heading_angle)
-            new_y = human.y - ((human.v)*time_step + rand_num)*sin(heading_angle)
-        end
-    #Fourth Quadrant
-    else(human.goal.x >= human.x && human.goal.y <= human.y)
-        if(human.goal.x == human.x)
-            new_x = human.x
-            new_y = human.y - (human.v)*time_step - rand_num
-        elseif(human.goal.y == human.y)
-            new_x = human.x + (human.v)*time_step + rand_num
-            new_y = human.y
-        else
-            heading_angle = atan((human.goal.y - human.y) / (human.goal.x - human.x))
-            new_x = human.x + ((human.v)*time_step + rand_num)*cos(heading_angle)
-            new_y = human.y + ((human.v)*time_step + rand_num)*sin(heading_angle)
-        end
-    end
-
-    new_x = clamp(new_x,0.0,world_length)
-    new_y = clamp(new_y,0.0,world_breadth)
-    new_human_state = HumanState(new_x,new_y,human.v,human.goal)
-
-    return new_human_state
-end
 #=
-unit_test_human = human_state(10.0,10.0,1.0,location(100.0,100.0),7.0)
-update_human_position_pomdp_planning(unit_test_human,env.length,env.breadth,1.0,1.0,MersenneTwister(1234))
-update_human_position_pomdp_planning(unit_test_human,100.0,100.0,1.0,1.0,MersenneTwister(1234))
-@code_warntype update_human_position_pomdp_planning(unit_test_human,100.0,100.0,1.0,1.0,MersenneTwister(1234))
+************************************************************************************************
+Simulate the vehicle one step forward in POMDP planning
 =#
-
-
-#************************************************************************************************
-#Simulate the vehicle one step forward in POMDP planning
-
-function update_vehicle_position(vehicle_x::Float64, vehicle_y::Float64, vehicle_theta::Float64, vehicle_L::Float64,vehicle_goal::Location,
-                                delta_heading_angle::Float64, new_vehicle_speed::Float64, world_length::Float64,world_breadth::Float64,
-                                one_time_step::Float64,radius_around_vehicle_goal::Float64, num_time_segments::Int64 = 10)
-
-    current_x, current_y, current_theta = vehicle_x, vehicle_y, vehicle_theta
-    if(new_vehicle_speed == 0.0)
-        vehicle_path = Tuple{Float64,Float64,Float64}[ (current_x, current_y, current_theta) ]
-        vehicle_path = repeat(vehicle_path, num_time_segments+1)
-    else
-        vehicle_path = Tuple{Float64,Float64,Float64}[ (current_x, current_y, current_theta) ]
-        # push!(vehicle_path,(Float64(current_x), Float64(current_y), Float64(current_theta)))
-        arc_length = new_vehicle_speed * one_time_step
-        steering_angle = atan((vehicle_L*delta_heading_angle)/arc_length)
-        for i in (1:num_time_segments)
-            if(steering_angle == 0.0)
-                new_theta = current_theta
-                new_x = current_x + new_vehicle_speed*cos(current_theta)*(one_time_step/num_time_segments)
-                new_y = current_y + new_vehicle_speed*sin(current_theta)*(one_time_step/num_time_segments)
-            else
-                new_theta = current_theta + (new_vehicle_speed * tan(steering_angle) * (one_time_step/num_time_segments) / vehicle_L)
-                new_theta = wrap_between_0_and_2Pi(new_theta)
-                new_x = current_x + ((vehicle_L / tan(steering_angle)) * (sin(new_theta) - sin(current_theta)))
-                new_y = current_y + ((vehicle_L / tan(steering_angle)) * (cos(current_theta) - cos(new_theta)))
-            end
-            push!(vehicle_path,(Float64(new_x), Float64(new_y), Float64(new_theta)))
-            current_x,current_y,current_theta = new_x,new_y,new_theta
-            if(is_within_range(current_x,current_y,vehicle_goal.x,vehicle_goal.y,radius_around_vehicle_goal))
-                for j in i+1:num_time_segments
-                    push!(vehicle_path,(current_x, current_y, current_theta))
-                end
-                return vehicle_path
-            end
-            if(current_x>world_length-vehicle_L || current_y>world_breadth-vehicle_L || current_x<0.0+vehicle_L || current_y<0.0+vehicle_L)
-                for j in i+1:num_time_segments
-                    push!(vehicle_path,(current_x, current_y, current_theta))
-                end
-                return vehicle_path
-            end
-        end
-    end
-    # println(vehicle_x, vehicle_y, vehicle_theta, vehicle_L, delta_heading_angle, new_vehicle_speed)
-    # println(vehicle_path)
-    return vehicle_path
-end
-
-
-function update_vehicle_position(s, m, steering_angle, new_vehicle_speed)
+function update_vehicle_position(s, m::ExtendedSpacePOMDP, steering_angle, new_vehicle_speed)
 
     current_x, current_y, current_theta = s.vehicle_x, s.vehicle_y, s.vehicle_theta
     if(new_vehicle_speed == 0.0)
@@ -254,7 +105,7 @@ function update_vehicle_position(s, m, steering_angle, new_vehicle_speed)
         vehicle_path = Tuple{Float64,Float64,Float64}[ (current_x, current_y, current_theta) ]
         # push!(vehicle_path,(Float64(current_x), Float64(current_y), Float64(current_theta)))
         # arc_length = new_vehicle_speed * m.one_time_step
-        # steering_angle = atan((m.vehicle_L*delta_heading_angle)/arc_length)
+        # steering_angle = atan((m.vehicle_L*steering_angle)/arc_length)
         for i in (1:m.num_segments_in_one_time_step)
             if(steering_angle == 0.0)
                 new_theta = current_theta
@@ -282,11 +133,10 @@ function update_vehicle_position(s, m, steering_angle, new_vehicle_speed)
             end
         end
     end
-    # println(vehicle_x, vehicle_y, vehicle_theta, vehicle_L, delta_heading_angle, new_vehicle_speed)
+    # println(vehicle_x, vehicle_y, vehicle_theta, vehicle_L, steering_angle, new_vehicle_speed)
     # println(vehicle_path)
     return vehicle_path
 end
-
 #=
 unit_test_vehicle = Vehicle(2.0,2.0,0.0,1.0,1.0,location(99.0,74.0),human_state[],Float64[])
 unit_test_delta_angle = 0.0
@@ -297,62 +147,10 @@ update_vehicle_position_pomdp_planning(unit_test_vehicle.x,unit_test_vehicle.y,u
 =#
 
 
-#************************************************************************************************
-# Reward functions for the POMDP model
-# Human Collision Penalty
-function human_collision_penalty(human_collision_flag::Bool, penalty::Float64)
-    if(human_collision_flag)
-        return penalty
-    else
-        return 0.0
-    end
-end
-
-# Obstacle Collision Penalty
-function obstacle_collision_penalty(obstacle_collision_flag::Bool, penalty::Float64)
-    if(obstacle_collision_flag)
-        return penalty
-    else
-        return 0.0
-    end
-end
-
-# Goal Reward
-function vehicle_goal_reached_reward(goal_reached_flag::Bool, goal_reward::Float64)
-    if(goal_reached_flag)
-        return goal_reward
-    else
-        return 0.0
-    end
-end
-
-# Low Speed Penalty
-function low_speed_penalty(current_vehicle_speed::Float64, max_vehicle_speed::Float64)
-    return (current_vehicle_speed - max_vehicle_speed)/max_vehicle_speed
-end
-
-#Immediate Stop penalty
-function immediate_stop_penalty(immediate_stop_flag::Bool, penalty::Float64)
-    if(immediate_stop_flag)
-        return penalty/10.0
-    else
-        return 0.0
-    end
-end
-
-#Penalty for heading angle changes
-function heading_angle_change_penalty(delta_heading_angle::Float64)
-    if(delta_heading_angle != 0.0)
-        return -1.0
-    else
-        return 0.0
-    end
-end
-
-
-#************************************************************************************************
-#POMDP Generative Model
-
+#=
+************************************************************************************************
+POMDP Generative Model
+=#
 #parent = Dict()
 function POMDPs.gen(m::ExtendedSpacePOMDP, s, a, rng)
 
@@ -433,7 +231,7 @@ function POMDPs.gen(m::ExtendedSpacePOMDP, s, a, rng)
     end
     new_vehicle_speed = clamp(s.vehicle_v + a.delta_speed, 0.0, m.max_vehicle_speed)
     # steering_angle = get_steering_angle(m.vehicle_L, a.delta_heading_angle, new_vehicle_speed, m.one_time_step)
-    steering_angle = a.delta_heading_angle
+    steering_angle = a.steering_angle
     vehicle_path = update_vehicle_position(s, m, steering_angle, new_vehicle_speed)
     new_vehicle_position = vehicle_path[end]
 
@@ -514,7 +312,7 @@ function POMDPs.gen(m::ExtendedSpacePOMDP, s, a, rng)
     r += immediate_stop_penalty(immediate_stop, m.human_collision_penalty)
     #println("Reward if you had to apply immediate brakes", r)
     #Penalize if vehicle's heading angle changes
-    r += heading_angle_change_penalty(a.delta_heading_angle)
+    r += heading_angle_change_penalty(a.steering_angle)
     #Penalty to avoid long paths
     r += -1.0
 
@@ -538,10 +336,12 @@ POMDPs.gen( unit_test_es_pomdp,unit_test_es_planner_state,unit_test_es_planner_a
 =#
 
 
-#************************************************************************************************
-#Upper bound value function for DESPOT
+#=
+************************************************************************************************
+Upper bound value function for DESPOT
+=#
 
-function is_collision_state_pomdp_planning(s::StateExtendedSpacePOMDP,m::ExtendedSpacePOMDP)
+function is_collision_state(s::StateExtendedSpacePOMDP,m::ExtendedSpacePOMDP)
     if((s.vehicle_x>m.world.length-m.vehicle_L) || (s.vehicle_y>m.world.breadth-m.vehicle_L) || (s.vehicle_x<0.0+m.vehicle_L) || (s.vehicle_y<0.0+m.vehicle_L))
         return true
     elseif(s.vehicle_v != 0.0)
@@ -560,7 +360,7 @@ function is_collision_state_pomdp_planning(s::StateExtendedSpacePOMDP,m::Extende
 end
 
 #This is not accurate for HV or NHV, especially when static obstacles are present. Can we get a better and tighter upper bound?
-function time_to_goal_pomdp_planning(s::StateExtendedSpacePOMDP,m)
+function time_to_goal(s::StateExtendedSpacePOMDP,m::ExtendedSpacePOMDP)
     vehicle_distance_to_goal = sqrt( (s.vehicle_x-m.vehicle_goal.x)^2 + (s.vehicle_y-m.vehicle_goal.y)^2 )
     # println("Distance is :", vehicle_distance_to_goal)
     # println(s)
@@ -568,7 +368,18 @@ function time_to_goal_pomdp_planning(s::StateExtendedSpacePOMDP,m)
     return ceil(vehicle_distance_to_goal/m.max_vehicle_speed)
 end
 
-function calculate_upper_bound(m::ExtendedSpacePOMDP, b)
+# function time_to_goal_pomdp_planning(s::StateExtendedSpacePOMDP, m::ExtendedSpacePOMDP{HJBPolicy})
+#     # interpolate HJB value for given state
+#     x = SVector(s.vehicle_x, s.vehicle_y, s.vehicle_theta, s.vehicle_v)
+#     HJB_val_x = interp_value(x, m.rollout_guide.value_array, m.rollout_guide.state_grid)
+#     # calculate minimum number of steps to reach goal for given HJB value
+#     steps_to_goal = ceil(HJB_val_x / m.rollout_guide.Dt)
+#     # # apply accumulated discount to undiscounted HJB value
+#     # discounted_HJB_time_to_goal = m.discount_factor^steps_to_goal * HJB_val_x
+#     return steps_to_goal
+# end
+
+function calculate_upper_bound(m::ExtendedSpacePOMDP{HJBPolicy}, b)
 
     # lower = lbound(DefaultPolicyLB(FunctionPolicy(b->calculate_lower_bound(extended_space_pomdp, b)),max_depth=100),m,b)
     value_sum = 0.0
@@ -581,11 +392,11 @@ function calculate_upper_bound(m::ExtendedSpacePOMDP, b)
             elseif(is_within_range(s.vehicle_x,s.vehicle_y, m.vehicle_goal.x, m.vehicle_goal.y, m.radius_around_vehicle_goal))
                 value_sum += w*m.goal_reached_reward
                 # println("Upper bound PA is :", value_sum)
-            elseif(is_collision_state_pomdp_planning(s,m))
+            elseif(is_collision_state(s,m))
                 value_sum += w*m.human_collision_penalty
                 # println("Upper bound PB is :", value_sum)
             else
-                value_sum += w*((discount(m)^time_to_goal_pomdp_planning(s,m))*m.goal_reached_reward)
+                value_sum += w*((discount(m)^time_to_goal(s,m))*m.goal_reached_reward)
                 # println("Upper bound PC is :", value_sum)
             end
         end
@@ -601,8 +412,67 @@ end
 #@code_warntype calculate_upper_bound_value(golfcart_pomdp(), initialstate_distribution(golfcart_pomdp()))
 
 
-#************************************************************************************************
-#Lower bound policy function for DESPOT
+#=
+************************************************************************************************
+Lower bound policy function for DESPOT
+=#
+function calculate_lower_bound(m::ExtendedSpacePOMDP{HJBPolicy},b)
+    #Implement a reactive controller for your lower bound
+    delta_speed = 0.5
+
+    #This bool is also used to check if all the states in the belief are terminal or not.
+    first_execution_flag = true
+    # if(length(b.scenarios)==1)
+    #     println("Tree Depth : ", b.depth)
+    #     println(b.scenarios)
+    # end
+    for (s, w) in weighted_particles(b)
+        if(s==nothing)
+            println(b)
+        end
+        if(s.vehicle_x == -100.0 && s.vehicle_y == -100.0)
+            continue
+        else
+            if(first_execution_flag)
+                first_execution_flag = false
+            else
+                dist_to_closest_human = 20000.0  #Some really big infeasible number (not Inf to avoid the type mismatch error)
+                for human in s.nearby_humans
+                    euclidean_distance = sqrt((s.vehicle_x - human.x)^2 + (s.vehicle_y - human.y)^2)
+                    if(euclidean_distance < dist_to_closest_human)
+                        dist_to_closest_human = euclidean_distance
+                    end
+                    if(dist_to_closest_human < m.d_near)
+                        delta_speed = -0.5
+                        a = reactive_policy(SVector(s.vehicle_x,s.vehicle_y,wrap_between_negative_pi_to_pi(s.vehicle_theta),s.vehicle_v),delta_speed,
+                            m.rollout_guide.get_actions,m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,
+                            m.rollout_guide.value_array,m.rollout_guide.veh,m.rollout_guide.state_grid)
+                        return ActionExtendedSpacePOMDP(a[1],a[2])
+                    end
+                end
+                if(dist_to_closest_human > m.d_far)
+                    chosen_delta_speed = 0.5
+                else
+                    chosen_delta_speed = 0.0
+                end
+                if(chosen_delta_speed < delta_speed)
+                    delta_speed = chosen_delta_speed
+                end
+            end
+        end
+    end
+
+    #This condition is true only when all the states in the belief are terminal. In that case, just return (0.0,0.0)
+    if(first_execution_flag)
+        return ActionExtendedSpacePOMDP(0.0,0.0)
+    end
+    s = first(particles(b))
+    a = reactive_policy(SVector(s.vehicle_x,s.vehicle_y,wrap_between_negative_pi_to_pi(s.vehicle_theta),s.vehicle_v),delta_speed,
+        m.rollout_guide.get_actions,m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,
+        m.rollout_guide.value_array,m.rollout_guide.veh,m.rollout_guide.state_grid)
+    return ActionExtendedSpacePOMDP(a[1],a[2])
+end
+
 function calculate_lower_bound(m::ExtendedSpacePOMDP,b)
     #Implement a reactive controller for your lower bound
     speed_change_to_be_returned = 1.0
@@ -671,61 +541,6 @@ function calculate_lower_bound(m::ExtendedSpacePOMDP,b)
     #We have already found the best steering angle to take.
     #@show(best_delta_angle,0.0)
     return ActionExtendedSpacePOMDP(delta_angle,0.0)
-end
-
-function HJB_calculate_lower_bound(m::ExtendedSpacePOMDP,b)
-    #Implement a reactive controller for your lower bound
-    delta_speed = 1.0
-
-    #This bool is also used to check if all the states in the belief are terminal or not.
-    first_execution_flag = true
-    # if(length(b.scenarios)==1)
-    #     println("Tree Depth : ", b.depth)
-    #     println(b.scenarios)
-    # end
-    for (s, w) in weighted_particles(b)
-        if(s.vehicle_x == -100.0 && s.vehicle_y == -100.0)
-            continue
-        else
-            if(first_execution_flag)
-                first_execution_flag = false
-            else
-                dist_to_closest_human = 200.0  #Some really big infeasible number (not Inf because avoid the type mismatch error)
-                for human in s.nearby_humans
-                    euclidean_distance = sqrt((s.vehicle_x - human.x)^2 + (s.vehicle_y - human.y)^2)
-                    if(euclidean_distance < dist_to_closest_human)
-                        dist_to_closest_human = euclidean_distance
-                    end
-                    if(dist_to_closest_human < m.d_near)
-                        delta_speed = -1.0
-                        a = rollout_policy(SVector(s.vehicle_x,s.vehicle_y,wrap_between_negative_pi_to_pi(s.vehicle_theta),s.vehicle_v), delta_speed,
-                            m.rollout_guide.get_actions, m.rollout_guide.get_cost,m.one_time_step, m.rollout_guide.value_array, m.rollout_guide.veh,
-                            m.rollout_guide.state_grid)
-                        return ActionExtendedSpacePOMDP(a[1],a[2])
-                    end
-                end
-                if(dist_to_closest_human > m.d_far)
-                    chosen_delta_speed = 1.0
-                else
-                    chosen_delta_speed = 0.0
-                end
-                if(chosen_delta_speed < delta_speed)
-                    delta_speed = chosen_delta_speed
-                end
-            end
-        end
-    end
-
-    #This condition is true only when all the states in the belief are terminal. In that case, just return (0.0,0.0)
-    if(first_execution_flag == true)
-        #@show(0.0,0.0)
-        return ActionExtendedSpacePOMDP(0.0,0.0)
-    end
-    s = first(particles(b))
-    a = rollout_policy(SVector(s.vehicle_x,s.vehicle_y,wrap_between_negative_pi_to_pi(s.vehicle_theta),s.vehicle_v), delta_speed,
-        m.rollout_guide.get_actions, m.rollout_guide.get_cost,m.one_time_step, m.rollout_guide.value_array, m.rollout_guide.veh,
-        m.rollout_guide.state_grid)
-    return ActionExtendedSpacePOMDP(a[1],a[2])
 end
 
 function calculate_lower_bound_new(m::ExtendedSpacePOMDP,b)
@@ -797,6 +612,74 @@ function calculate_lower_bound_new(m::ExtendedSpacePOMDP,b)
     return ActionExtendedSpacePOMDP(delta_angle,0.0)
 end
 
+function reward_at_max_depth_lower_bound_policy_rollout(m,b)
+    #print("HI")
+    # #sleep(5)
+    # print(b.depth)
+    value_sum = 0.0
+    for (s, w) in weighted_particles(b)
+        # cart_distance_to_goal = sqrt( (s.cart.x - s.cart.goal.x)^2 + (s.cart.y - s.cart.goal.y)^2 )
+        # if(cart_distance_to_goal > 1.0)
+        #     value_sum += w*(1/cart_distance_to_goal)*m.goal_reward
+        # end
+        value_sum += w*((discount(m)^time_to_goal_pomdp_planning_2D_action_space(s,m.max_vehicle_speed))*m.goal_reached_reward)
+    end
+    #println("HG rules")
+    return value_sum
+end
+
+#=
+************************************************************************************************
+Functions for debugging lb>ub error
+=#
+function debug_is_collision_state_pomdp_planning_2D_action_space(s,m)
+
+    if((s.vehicle.x>100.0) || (s.vehicle.y>100.0) || (s.vehicle.x<0.0) || (s.vehicle.y<0.0))
+        println("Stepped Outside")
+        return true
+    else
+        for human in s.nearby_humans
+            if(is_within_range(location(s.vehicle.x,s.vehicle.y),location(human.x,human.y),m.min_safe_distance_from_human))
+                println("Collision with human ", human)
+                return true
+            end
+        end
+        for obstacle in m.world.obstacles
+            if(is_within_range(location(s.vehicle.x,s.vehicle.y),location(obstacle.x,obstacle.y),obstacle.r + m.obstacle_distance_threshold))
+                println("Collision with obstacle ", obstacle)
+                return true
+            end
+        end
+        return false
+    end
+end
+
+function debug_golfcart_upper_bound_2D_action_space(m,b)
+
+    # lower = lbound(DefaultPolicyLB(FunctionPolicy(calculate_lower_bound_policy_pomdp_planning_2D_action_space), max_depth=100),m , b)
+    lower = lbound(DefaultPolicyLB(FunctionPolicy(calculate_lower_bound_policy_pomdp_planning_2D_action_space), max_depth=100, final_value=reward_to_be_awarded_at_max_depth_in_lower_bound_policy_rollout),m , b)
+    #@show(lower)
+    value_sum = 0.0
+    for (s, w) in weighted_particles(b)
+        if (s.cart.x == -100.0 && s.cart.y == -100.0)
+            value_sum += 0.0
+        elseif (is_within_range(location(s.cart.x,s.cart.y), s.cart.goal, m.cart_goal_reached_distance_threshold))
+            value_sum += w*m.goal_reward
+        elseif (is_collision_state_pomdp_planning_2D_action_space(s,m))
+            value_sum += w*m.human_collision_penalty
+        else
+            value_sum += w*((discount(m)^time_to_goal_pomdp_planning_2D_action_space(s,m.max_cart_speed))*m.goal_reward)
+        end
+    end
+    #@show("*********************************************************************")
+    #@show(value_sum)
+    u = (value_sum)/weight_sum(b)
+    if lower > u
+        push!(bad, (lower,u,b))
+        @show("IN DEBUG",lower,u)
+    end
+    return u
+end
 
 function debug_calculate_lower_bound(m::ExtendedSpacePOMDP,s)
     #Implement a reactive controller for your lower bound
@@ -866,79 +749,11 @@ function debug_calculate_lower_bound(m::ExtendedSpacePOMDP,s)
     return ActionExtendedSpacePOMDP(delta_angle,0.0)
 end
 
-
-function reward_at_max_depth_lower_bound_policy_rollout(m,b)
-    #print("HI")
-    # #sleep(5)
-    # print(b.depth)
-    value_sum = 0.0
-    for (s, w) in weighted_particles(b)
-        # cart_distance_to_goal = sqrt( (s.cart.x - s.cart.goal.x)^2 + (s.cart.y - s.cart.goal.y)^2 )
-        # if(cart_distance_to_goal > 1.0)
-        #     value_sum += w*(1/cart_distance_to_goal)*m.goal_reward
-        # end
-        value_sum += w*((discount(m)^time_to_goal_pomdp_planning_2D_action_space(s,m.max_vehicle_speed))*m.goal_reached_reward)
-    end
-    #println("HG rules")
-    return value_sum
-end
-
-
-#************************************************************************************************
-#Functions for debugging lb>ub error
-function debug_is_collision_state_pomdp_planning_2D_action_space(s,m)
-
-    if((s.vehicle.x>100.0) || (s.vehicle.y>100.0) || (s.vehicle.x<0.0) || (s.vehicle.y<0.0))
-        println("Stepped Outside")
-        return true
-    else
-        for human in s.nearby_humans
-            if(is_within_range(location(s.vehicle.x,s.vehicle.y),location(human.x,human.y),m.min_safe_distance_from_human))
-                println("Collision with human ", human)
-                return true
-            end
-        end
-        for obstacle in m.world.obstacles
-            if(is_within_range(location(s.vehicle.x,s.vehicle.y),location(obstacle.x,obstacle.y),obstacle.r + m.obstacle_distance_threshold))
-                println("Collision with obstacle ", obstacle)
-                return true
-            end
-        end
-        return false
-    end
-end
-
-function debug_golfcart_upper_bound_2D_action_space(m,b)
-
-    # lower = lbound(DefaultPolicyLB(FunctionPolicy(calculate_lower_bound_policy_pomdp_planning_2D_action_space), max_depth=100),m , b)
-    lower = lbound(DefaultPolicyLB(FunctionPolicy(calculate_lower_bound_policy_pomdp_planning_2D_action_space), max_depth=100, final_value=reward_to_be_awarded_at_max_depth_in_lower_bound_policy_rollout),m , b)
-    #@show(lower)
-    value_sum = 0.0
-    for (s, w) in weighted_particles(b)
-        if (s.cart.x == -100.0 && s.cart.y == -100.0)
-            value_sum += 0.0
-        elseif (is_within_range(location(s.cart.x,s.cart.y), s.cart.goal, m.cart_goal_reached_distance_threshold))
-            value_sum += w*m.goal_reward
-        elseif (is_collision_state_pomdp_planning_2D_action_space(s,m))
-            value_sum += w*m.human_collision_penalty
-        else
-            value_sum += w*((discount(m)^time_to_goal_pomdp_planning_2D_action_space(s,m.max_cart_speed))*m.goal_reward)
-        end
-    end
-    #@show("*********************************************************************")
-    #@show(value_sum)
-    u = (value_sum)/weight_sum(b)
-    if lower > u
-        push!(bad, (lower,u,b))
-        @show("IN DEBUG",lower,u)
-    end
-    return u
-end
-
-#************************************************************************************************
-#Action Function for the POMDP
-
-function get_actions_HJB(m::ExtendedSpacePOMDP,b)
+#=
+************************************************************************************************
+Action Function for the POMDP
+=#
+function get_actions(m::ExtendedSpacePOMDP{HJBPolicy},b)
     max_steering_angle = 0.475
     max_delta_angle = pi/4
     delta_speed = 0.5
@@ -956,8 +771,9 @@ function get_actions_HJB(m::ExtendedSpacePOMDP,b)
                 ]
     else
         steering_angle = clamp(get_steering_angle(m.vehicle_L,max_delta_angle,pomdp_state.vehicle_v,m.one_time_step),0.0,max_steering_angle)
-        rollout_action = rollout_policy(SVector(pomdp_state.vehicle_x,pomdp_state.vehicle_y,wrap_between_negative_pi_to_pi(pomdp_state.vehicle_theta),pomdp_state.vehicle_v), delta_speed,
-                                rollout_get_actions, rollout_get_cost, 0.5, rollout_guide.value_array, rollout_guide.veh, rollout_guide.state_grid)
+        rollout_action = reactive_policy(SVector(pomdp_state.vehicle_x,pomdp_state.vehicle_y,wrap_between_negative_pi_to_pi(pomdp_state.vehicle_theta),pomdp_state.vehicle_v), delta_speed,
+                                m.rollout_guide.get_actions, m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,m.rollout_guide.value_array,
+                                m.rollout_guide.veh,m.rollout_guide.state_grid)
         return [ActionExtendedSpacePOMDP(-steering_angle,0.0),
                 ActionExtendedSpacePOMDP(-2*steering_angle/3,0.0),
                 ActionExtendedSpacePOMDP(-steering_angle/3,0.0),
@@ -973,8 +789,9 @@ function get_actions_HJB(m::ExtendedSpacePOMDP,b)
     end
 end
 
-
-
+discount(m::ExtendedSpacePOMDP) = m.discount_factor
+isterminal(m::ExtendedSpacePOMDP, s::StateExtendedSpacePOMDP) = is_terminal_state(s,Location(-100.0,-100.0));
+actions(m::ExtendedSpacePOMDP{HJBPolicy},b) = get_actions(m,b)
 
 
 # function get_actions(m::ExtendedSpacePOMDP,b)
@@ -1024,34 +841,5 @@ end
 #         end
 #         # return [(delta_angle, 1.0),(-pi/4,0.0),(-pi/6,0.0),(-pi/12,0.0),(0.0,-1.0),(0.0,0.0),(0.0,1.0),(pi/12,1.0),(pi/6,0.0),(pi/4,0.0),(-10.0,-10.0)]
 #         # return [(delta_angle, 1.0),(-pi/4,0.0),(-pi/6,0.0),(-pi/12,0.0),(0.0,-1.0),(0.0,0.0),(0.0,1.0),(pi/12,1.0),(pi/6,0.0),(pi/4,0.0),(-10.0,-10.0)]
-#     end
-# end
-
-
-discount(m::ExtendedSpacePOMDP) = m.discount_factor
-isterminal(m::ExtendedSpacePOMDP, s::StateExtendedSpacePOMDP) = is_terminal_state(s,Location(-100.0,-100.0));
-actions(m::ExtendedSpacePOMDP,b) = get_actions_HJB(m,b)
-
-# j = 0
-# for i in 1:10
-#     println("i " , i)
-#     if(i%2==0)
-#         for j in 1:i
-#             println("j ",j)
-#             if(j==2)
-#                 break
-#             end
-#         end
-#     else
-#         for j in 1:i
-#             println("K")
-#             if(j==2)
-#                 break
-#             end
-#         end
-#     end
-#     println("J is ", j)
-#     if(j==2)
-#         break
 #     end
 # end

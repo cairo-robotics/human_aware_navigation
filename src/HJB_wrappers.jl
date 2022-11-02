@@ -1,9 +1,12 @@
 using BellmanPDEs
+using LazySets
+using GridInterpolations
+using StaticArraysCore
 
 struct HJBPlanningDetails
-    dt::Float64
+    Dt::Float64
     max_solve_steps::Int64
-    dval_tol::Float64
+    Dval_tol::Float64
     max_steering_angle::Float64
     max_vehicle_speed::Float64
 end
@@ -55,11 +58,10 @@ function find_HJB_path(vehicle, vehicle_params, rollout_guide, exp_details)
     i = 1
 
     while(!is_within_range(current_state[1],current_state[2], vehicle_params.goal.x, vehicle_params.goal.y, exp_details.radius_around_vehicle_goal) && i<100)
+        vehicle_action = HJB_policy(current_state,0.0,rollout_get_actions,rollout_get_cost,exp_details.one_time_step,rollout_guide.q_value_array,
+                                rollout_guide.value_array,rollout_guide.veh,rollout_guide.state_grid)
 
-        vehicle_action = HJB_policy(current_state, rollout_get_actions, rollout_get_cost, exp_details.one_time_step,
-                                rollout_guide.value_array, rollout_guide.veh, rollout_guide.state_grid)
-
-        new_vehicle_position = propogate_vehicle(current_vehicle, vehicle_params, vehicle_action[2], vehicle_action[1], rollout_guide.dt)
+        new_vehicle_position = propogate_vehicle(current_vehicle, vehicle_params, vehicle_action[2], vehicle_action[1], rollout_guide.Dt)
         current_state = SVector(new_vehicle_position.x,new_vehicle_position.y,wrap_between_negative_pi_to_pi(new_vehicle_position.theta),new_vehicle_position.v)
         current_vehicle = new_vehicle_position
         push!(path_x, current_state[1])
@@ -92,6 +94,14 @@ function rollout_get_actions(x, Dt, veh)
     phi_lim_n = clamp(phi_lim_n, 0.0, phi_max)
 
     actions = SVector{21, SVector{2, Float64}}(
+        (-phi_lim_n, -Dv_lim),        # Dv = -Dv
+        (-2/3*phi_lim_n, -Dv_lim),
+        (-1/3*phi_lim_n, -Dv_lim),
+        (0.0, -Dv_lim),
+        (1/3*phi_lim_n, -Dv_lim),
+        (2/3*phi_lim_n, -Dv_lim),
+        (phi_lim_n, -Dv_lim),
+
         (-phi_lim, 0.0),       # Dv = 0.0
         (-2/3*phi_lim, 0.0),
         (-1/3*phi_lim, 0.0),
@@ -100,23 +110,18 @@ function rollout_get_actions(x, Dt, veh)
         (2/3*phi_lim, 0.0),
         (phi_lim, 0.0),
 
-        (-phi_lim_n, -Dv_lim),        # Dv = +Dv
-        (-2/3*phi_lim_n, -Dv_lim),
-        (-1/3*phi_lim_n, -Dv_lim),
-        (0.0, -Dv_lim),
-        (1/3*phi_lim_n, -Dv_lim),
-        (2/3*phi_lim_n, -Dv_lim),
-        (phi_lim_n, -Dv_lim),
-
-        (-phi_lim_p, Dv_lim),        # Dv = -Dv
+        (-phi_lim_p, Dv_lim),        # Dv = +Dv
         (-2/3*phi_lim_p, Dv_lim),
         (-1/3*phi_lim_p, Dv_lim),
         (0.0, Dv_lim),
         (1/3*phi_lim_p, Dv_lim),
         (2/3*phi_lim_p, Dv_lim),
-        (phi_lim_p, Dv_lim))
+        (phi_lim_p, Dv_lim)
+        )
 
-    return actions
+    ia_set = collect(1:length(actions))
+
+    return actions,ia_set
 end
 
 function rollout_get_cost(x, a, Dt)
@@ -130,14 +135,14 @@ function HJBPolicy(HJB_planning_details, exp_details, vehicle_params)
     HJB_veh = get_HJB_vehicle(vehicle_params)
     HJB_sg = get_state_grid(exp_details.env, vehicle_params)
 
-    #Solv HJB equation
-    value_array, optimal_action_index_array = solve_HJB_PDE(rollout_get_actions, rollout_get_cost, HJB_planning_details.dt, HJB_env, HJB_veh,
-                                                HJB_sg, HJB_planning_details.dval_tol, HJB_planning_details.max_solve_steps)
+    #Solve HJB
+    q_value_array,value_array = solve_HJB_PDE(rollout_get_actions, rollout_get_cost, HJB_planning_details.Dt, HJB_env, HJB_veh,
+                                                HJB_sg, HJB_planning_details.Dval_tol, HJB_planning_details.max_solve_steps)
 
     return HJBPolicy(
-        HJB_planning_details.dt,
+        HJB_planning_details.Dt,
         value_array,
-        optimal_action_index_array,
+        q_value_array,
         rollout_get_actions,
         rollout_get_cost,
         HJB_env,

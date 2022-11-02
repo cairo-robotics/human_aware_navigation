@@ -30,8 +30,10 @@ struct HumanState
     goal::Location
 end
 
-struct HumanParameters
+mutable struct HumanParameters
     id::Int64
+    path::Array{HumanState,1}
+    path_index::Int64
 end
 
 struct NearbyHumans
@@ -68,6 +70,7 @@ struct VehicleParametersLSPlanner
     max_speed::Float64
     goal::Location
     controls_sequence::Array{Float64,1}
+    index::Int64
 end
 # vp_ls = VehicleParametersLSPlanner(0.3,3.0,Location(100.0,100.0),Float64[])
 
