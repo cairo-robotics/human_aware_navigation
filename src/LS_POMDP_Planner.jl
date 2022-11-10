@@ -23,7 +23,7 @@ end
 Struct for Hybrid A* policy
 =#
 struct HybridAStarPolicy
-    controls::Array{Float64,1}
+    controls_sequence::Array{Float64,1}
     len::Int64
 end
 

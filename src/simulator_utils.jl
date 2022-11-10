@@ -5,6 +5,11 @@ Base.copy(obj::NearbyHumans) = NearbyHumans(copy(obj.position_data),copy(obj.ids
 Base.copy(obj::HumanState) = HumanState(obj.x,obj.y,obj.v,obj.goal)
 Base.copy(obj::HumanParameters) = HumanParameters(obj.id,obj.path,obj.path_index)
 
+#=
+************************************************************************************************
+Functions to generate humans in the environment
+=#
+
 function is_divisible(a,b)
     return isapprox(round(a/b)*b, a)
 end
@@ -15,7 +20,7 @@ function in_safe_area(px,py,vehicle_x,vehicle_y,world)
             return false
         end
     end
-    if(is_within_range(px,py,vehicle_x,vehicle_y,4.0))
+    if(is_within_range(px,py,vehicle_x,vehicle_y,1.0))
         return false
     end
     return true
@@ -72,6 +77,12 @@ unit_test_all_goals_list = get_human_goals(unit_test_world)
 h,p = generate_humans(unit_test_world,unit_test_vehicle_start_location,1.0,unit_test_all_goals_list,100,1.0,MersenneTwister(11))
 =#
 
+
+#=
+************************************************************************************************
+Functions to respawn human in the environment
+=#
+
 function spawn_new_human(exp_details, vehicle, vehicle_params)
 
     # println("************************Spawning new human************************")
@@ -83,7 +94,7 @@ function spawn_new_human(exp_details, vehicle, vehicle_params)
     =#
 
     vehicle_goal = vehicle_params.goal
-    vehicle_L = vehicle_params.L
+    vehicle_L = vehicle_params.radius
     possible_sides = [ (0.0,Inf), (Inf,exp_details.env.breadth), (exp_details.env.length,Inf), (Inf,0.0) ]
     chosen_x, chosen_y = rand(exp_details.user_defined_rng, possible_sides)
 
@@ -109,6 +120,7 @@ function spawn_new_human(exp_details, vehicle, vehicle_params)
         while( !in_safe_area(chosen_x,chosen_y,vehicle.x,vehicle.y,exp_details.env) ||
                 is_within_range(chosen_x,chosen_y,vehicle_goal.x,vehicle_goal.y, exp_details.radius_around_vehicle_goal+vehicle_L))
             chosen_x = rand(exp_details.user_defined_rng)*exp_details.env.length
+            # println(chosen_x, " ", chosen_y, " ", vehicle)
         end
         if(chosen_y == 0.0)
             human_goal_y = exp_details.env.breadth
@@ -157,6 +169,10 @@ function respawn_humans(existing_humans,existing_humans_params,current_vehicle,c
 end
 
 
+#=
+************************************************************************************************
+Function to get vehicle sensor data
+=#
 
 function get_lidar_data_and_ids(vehicle,humans,humans_params,lidar_range)
     lidar_data = Array{HumanState,1}()
@@ -174,11 +190,83 @@ function get_lidar_data_and_ids(vehicle,humans,humans_params,lidar_range)
     return lidar_data,ids
 end
 
+function get_belief(old_sensor_data, new_lidar_data, new_ids, human_goal_locations)
+    new_belief = update_belief(old_sensor_data,new_lidar_data,new_ids,human_goal_locations)
+    return new_belief
+end
+
 #=
 Function to check if it is time to update the vehicle's belief
 Return the updated belief if it is time, else create a copy of passed belief and return it.
 =#
-function get_belief(old_sensor_data, new_lidar_data, new_ids, human_goal_locations)
-    new_belief = update_belief(old_sensor_data,new_lidar_data,new_ids,human_goal_locations)
-    return new_belief
+function get_vehicle_sensor_data(veh,humans,humans_params,old_sensor_data,exp_details,current_time_value)
+    if( is_divisible(current_time_value,exp_details.update_sensor_data_time_interval) )
+        new_lidar_data, new_ids = get_lidar_data_and_ids(veh,humans,humans_params,exp_details.lidar_range)
+        new_belief = get_belief(old_sensor_data, new_lidar_data, new_ids, exp_details.human_goal_locations)
+        return VehicleSensor(new_lidar_data,new_ids,new_belief)
+    else
+        return VehicleSensor(copy(old_sensor_data.lidar_data),copy(old_sensor_data.ids),copy(old_sensor_data.belief))
+    end
+end
+
+function get_nearby_humans(sim_obj,num_nearby_humans,min_safe_distance_from_human,cone_half_angle::Float64=pi/3.0)
+
+    nearby_humans_position_data = Array{HumanState,1}()
+    nearby_humans_id = Array{Int64,1}()
+    nearby_humans_belief = Array{HumanGoalsBelief,1}()
+    priority_queue_nearby_humans = PriorityQueue{Tuple{HumanState,Int64,HumanGoalsBelief},Float64}(Base.Order.Forward)
+    humans = sim_obj.vehicle_sensor_data.lidar_data
+    ids = sim_obj.vehicle_sensor_data.ids
+    current_belief = sim_obj.vehicle_sensor_data.belief
+    vehicle = sim_obj.vehicle
+
+    for i in 1:length(humans)
+        human = humans[i]
+        human_id = ids[i]
+        human_belief = current_belief[i]
+        angle_between_vehicle_and_human = get_heading_angle(human.x, human.y, vehicle.x, vehicle.y)
+        difference_in_angles = abs(vehicle.theta - angle_between_vehicle_and_human)
+        euclidean_distance = sqrt( (vehicle.x - human.x)^2 + (vehicle.y - human.y)^2 )
+        if(difference_in_angles <= cone_half_angle)
+            priority_queue_nearby_humans[(human,human_id,human_belief)] = euclidean_distance
+        elseif((2*pi - difference_in_angles) <= cone_half_angle)
+            priority_queue_nearby_humans[(human,human_id,human_belief)] = euclidean_distance
+        elseif(euclidean_distance<=min_safe_distance_from_human+sim_obj.vehicle_params.radius)
+            priority_queue_nearby_humans[(human,human_id,human_belief)] = euclidean_distance
+        end
+    end
+
+    num_nearby_humans = min(num_nearby_humans, length(priority_queue_nearby_humans))
+    for i in 1:num_nearby_humans
+        human,id,belief = dequeue!(priority_queue_nearby_humans)
+        push!(nearby_humans_position_data, human)
+        push!(nearby_humans_id, id)
+        push!(nearby_humans_belief, belief)
+    end
+
+    return NearbyHumans(nearby_humans_position_data,nearby_humans_id,nearby_humans_belief)
+end
+
+
+
+#=
+************************************************************************************************
+Function to check if the encountered scenario is a risky scenario
+=#
+function get_num_risks(vehicle,vehicle_params,human_position_data,min_safe_distance_from_human)
+    risks = 0
+    if(vehicle.v!=0.0)
+        vehicle_center_x = vehicle.x + vehicle_params.dist_origin_to_center*cos(vehicle.theta)
+        vehicle_center_y = vehicle.y + vehicle_params.dist_origin_to_center*sin(vehicle.theta)
+        for human in human_position_data
+            euclidean_distance = sqrt( (human.x - vehicle_center_x)^2 + (human.y - vehicle_center_y)^2 )
+            if(euclidean_distance<=(vehicle_params.radius+min_safe_distance_from_human))
+                println( "A risky scenario encountered and the distance is : ", euclidean_distance )
+                risks += 1
+            end
+        end
+    else
+        return 0;
+    end
+    return risks;
 end

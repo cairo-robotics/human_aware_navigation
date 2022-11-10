@@ -1,10 +1,10 @@
 include("simulator_utils.jl")
 
 
-struct Simulator
+struct Simulator{P}
     env::ExperimentEnvironment
     vehicle::Vehicle
-    vehicle_params::Union{VehicleParametersESPlanner, VehicleParametersLSPlanner}
+    vehicle_params::P
     vehicle_sensor_data::VehicleSensor
     humans::Array{HumanState,1}
     humans_params::Array{HumanParameters,1}
@@ -17,7 +17,7 @@ Function for moving vehicle in the environment
 Returns a vehicle struct object
 =#
 function propogate_vehicle(vehicle::Vehicle, vehicle_params::VehicleParametersESPlanner, steering_angle::Float64, speed::Float64, time_duration::Float64)
-    new_x,new_y,new_theta =  move_vehicle(vehicle.x,vehicle.y,vehicle.theta,vehicle_params.L,steering_angle,speed,time_duration)
+    new_x,new_y,new_theta =  move_vehicle(vehicle.x,vehicle.y,vehicle.theta,vehicle_params.wheelbase,steering_angle,speed,time_duration)
     return Vehicle(new_x,new_y,new_theta,speed)
 end
 
@@ -36,76 +36,14 @@ Functions to modify vehicle_params
 Returns a vehicle_parameters struct object
 =#
 function modify_vehicle_params(params::VehicleParametersESPlanner)
-    return VehicleParametersESPlanner(params.L,params.max_speed,params.goal)
+    return VehicleParametersESPlanner(params.wheelbase,params.length,params.breadth,params.dist_origin_to_center,
+                params.radius,params.max_speed,params.max_steering_angle,params.goal)
 end
 
 function modify_vehicle_params(params::VehicleParametersLSPlanner)
     return VehicleParametersLSPlanner(params.L,params.max_speed,params.goal,params.hybrid_astar_path[2:end])
 end
 
-function get_vehicle_sensor_data(veh,humans,humans_params,old_sensor_data,exp_details,current_time_value)
-    if( is_divisible(current_time_value,exp_details.update_sensor_data_time_interval) )
-        new_lidar_data, new_ids = get_lidar_data_and_ids(veh,humans,humans_params,exp_details.lidar_range)
-        new_belief = get_belief(old_sensor_data, new_lidar_data, new_ids, exp_details.human_goal_locations)
-        return VehicleSensor(new_lidar_data,new_ids,new_belief)
-    else
-        return VehicleSensor(copy(old_sensor_data.lidar_data),copy(old_sensor_data.ids),copy(old_sensor_data.belief))
-    end
-end
-
-function get_nearby_humans(sim_obj,num_nearby_humans,min_safe_distance_from_human,cone_half_angle::Float64=pi/3.0)
-
-    nearby_humans_position_data = Array{HumanState,1}()
-    nearby_humans_id = Array{Int64,1}()
-    nearby_humans_belief = Array{HumanGoalsBelief,1}()
-    priority_queue_nearby_humans = PriorityQueue{Tuple{HumanState,Int64,HumanGoalsBelief},Float64}(Base.Order.Forward)
-    humans = sim_obj.vehicle_sensor_data.lidar_data
-    ids = sim_obj.vehicle_sensor_data.ids
-    current_belief = sim_obj.vehicle_sensor_data.belief
-    vehicle = sim_obj.vehicle
-
-    for i in 1:length(humans)
-        human = humans[i]
-        human_id = ids[i]
-        human_belief = current_belief[i]
-        angle_between_vehicle_and_human = get_heading_angle(human.x, human.y, vehicle.x, vehicle.y)
-        difference_in_angles = abs(vehicle.theta - angle_between_vehicle_and_human)
-        euclidean_distance = sqrt( (vehicle.x - human.x)^2 + (vehicle.y - human.y)^2 )
-        if(difference_in_angles <= cone_half_angle)
-            priority_queue_nearby_humans[(human,human_id,human_belief)] = euclidean_distance
-        elseif((2*pi - difference_in_angles) <= cone_half_angle)
-            priority_queue_nearby_humans[(human,human_id,human_belief)] = euclidean_distance
-        elseif(euclidean_distance<=min_safe_distance_from_human+sim_obj.vehicle_params.L)
-            priority_queue_nearby_humans[(human,human_id,human_belief)] = euclidean_distance
-        end
-    end
-
-    num_nearby_humans = min(num_nearby_humans, length(priority_queue_nearby_humans))
-    for i in 1:num_nearby_humans
-        human,id,belief = dequeue!(priority_queue_nearby_humans)
-        push!(nearby_humans_position_data, human)
-        push!(nearby_humans_id, id)
-        push!(nearby_humans_belief, belief)
-    end
-
-    return NearbyHumans(nearby_humans_position_data,nearby_humans_id,nearby_humans_belief)
-end
-
-function get_num_risks(vehicle,vehicle_params,human_position_data,min_safe_distance_from_human)
-    risks = 0
-    if(vehicle.v!=0.0)
-        for human in human_position_data
-            euclidean_distance = sqrt( (human.x - vehicle.x)^2 + (human.y - vehicle.y)^2 )
-            if(euclidean_distance<=(vehicle_params.L+min_safe_distance_from_human))
-                println( "A risky scenario encountered and the distance is : ", euclidean_distance )
-                risks += 1
-            end
-        end
-    else
-        return 0;
-    end
-    return risks;
-end
 
 #=
 Function to check if it is time to stop the simulation
@@ -113,22 +51,25 @@ Returns true or false
 =#
 function stop_simulation!(sim_obj,curr_time,exp_details,output)
     #Check if the vehicle has reached the goal
-    if(is_within_range(sim_obj.vehicle.x,sim_obj.vehicle.y,sim_obj.vehicle_params.goal.x,sim_obj.vehicle_params.goal.y,exp_details.radius_around_vehicle_goal))
+    vehicle_center_x = sim_obj.vehicle.x + sim_obj.vehicle_params.dist_origin_to_center*cos(sim_obj.vehicle.theta)
+    vehicle_center_y = sim_obj.vehicle.y + sim_obj.vehicle_params.dist_origin_to_center*sin(sim_obj.vehicle.theta)
+
+    if(is_within_range(vehicle_center_x,vehicle_center_y,sim_obj.vehicle_params.goal.x,sim_obj.vehicle_params.goal.y,exp_details.radius_around_vehicle_goal))
         output.vehicle_reached_goal = true
         println("Vehicle has reached the goal")
         return true
     end
     #Check if the vehicle is colliding with obstacles in the environment
     for obstacle in sim_obj.env.obstacles
-        if(in_obstacle(sim_obj.vehicle.x,sim_obj.vehicle.y,obstacle,sim_obj.vehicle_params.L))
+        if(in_obstacle(vehicle_center_x,vehicle_center_y,obstacle,sim_obj.vehicle_params.radius))
             output.vehicle_ran_into_obstacle = true
             println("Vehicle collided with a static obstacle")
             return true
         end
     end
     #Check if the vehicle is colliding with environment's boundary
-    if(sim_obj.vehicle.x<0.0+sim_obj.vehicle_params.L || sim_obj.vehicle.y<0.0+sim_obj.vehicle_params.L ||
-        sim_obj.vehicle.x>sim_obj.env.length-sim_obj.vehicle_params.L || sim_obj.vehicle.y>sim_obj.env.breadth-sim_obj.vehicle_params.L)
+    if(vehicle_center_x<0.0+sim_obj.vehicle_params.radius || vehicle_center_y<0.0+sim_obj.vehicle_params.radius ||
+        vehicle_center_x>sim_obj.env.length-sim_obj.vehicle_params.radius || vehicle_center_y>sim_obj.env.breadth-sim_obj.vehicle_params.radius)
         output.vehicle_ran_into_boundary_wall = true
         println("Vehicle collided with environment boundary")
         return true
@@ -200,13 +141,11 @@ function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, o
     output.sim_objects[current_time_value] = current_sim_obj
     nbh = NearbyHumans(HumanState[], Int64[], HumanGoalsBelief[])
     output.nearby_humans[current_time_value] = nbh
-
+    debug = true
+    start_time = time()
     # try
     while(!stop_simulation!(current_sim_obj,current_time_value,exp_details,output))
 
-        # println("Current time value : ", current_time_value)
-        # println("Current Vehicle State: ", current_sim_obj.vehicle)
-        # println("Action to be executed now : ", current_action)
         state_array = [current_sim_obj.vehicle.x, current_sim_obj.vehicle.y, current_sim_obj.vehicle.theta, current_sim_obj.vehicle.v]
         action_array = [current_action.steering_angle, current_action.delta_speed]
         println("Time = ", current_time_value,
@@ -215,11 +154,19 @@ function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, o
         #=
         Simulate for (one_time_step - pomdp_planning_time - buffer_time) seconds
         =#
+        if(debug)
+            println("Simulating for one_time_step - pomdp_planning_time - buffer_time seconds : " , exp_details.one_time_step - (pomdp_details.planning_time + exp_details.buffer_time))
+            start_time = time()
+        end
         time_duration_until_planning_begins = exp_details.one_time_step - (pomdp_details.planning_time + exp_details.buffer_time)
         current_sim_obj = simulate_vehicle_and_humans!(current_sim_obj, current_vehicle_steering_angle, current_vehicle_speed,
                                                 current_time_value, time_duration_until_planning_begins, exp_details, output)
         current_time_value += time_duration_until_planning_begins
-
+        if(debug)
+            println("Finished simulation")
+            time_taken = time() - start_time
+            println("Time Taken : ", time_taken)
+        end
         #=
         Take the current status of the environment.
         Predict the vehicle's future position using current_action after (pomdp_planning_time + buffer_time) seconds.
@@ -232,12 +179,16 @@ function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, o
         # println(predicted_vehicle_state)
         modified_vehicle_params = modify_vehicle_params(current_sim_obj.vehicle_params)
         if(is_within_range(predicted_vehicle_state.x,predicted_vehicle_state.y,modified_vehicle_params.goal.x,modified_vehicle_params.goal.y,exp_details.radius_around_vehicle_goal))
-            println("Predicted vehicle state in in goal")
+            println("Predicted vehicle state is in goal")
             next_action = ActionExtendedSpacePOMDP(0.0,0.0)
             output.nearby_humans[current_time_value] = nbh
             output.b_root[current_time_value] = nothing
             output.despot_trees[current_time_value] = nothing
         else
+            if(debug)
+                println("Starting POMDP planning")
+                start_time = time()
+            end
             nbh = get_nearby_humans(current_sim_obj,pomdp_details.num_nearby_humans,pomdp_details.min_safe_distance_from_human,
                                                     pomdp_details.cone_half_angle)
             b = TreeSearchScenarioParameters(predicted_vehicle_state.x,predicted_vehicle_state.y,predicted_vehicle_state.theta,predicted_vehicle_state.v,
@@ -246,12 +197,21 @@ function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, o
             output.nearby_humans[current_time_value] = nbh
             output.b_root[current_time_value] = b
             next_action, info = action_info(planner, b)
+            if(debug)
+                println("Finished POMDP planning. Action selected")
+                time_taken = time() - start_time
+                println("Time Taken : ", time_taken)
+            end
             output.despot_trees[current_time_value] = info
         end
         # next_action = ActionExtendedSpacePOMDP(0.0,0.0)
         #=
         Simulate for (pomdp_planning_time + buffer_time) seconds
         =#
+        if(debug)
+            println("Simulating for pomdp_planning_time + buffer_time seconds : " , pomdp_details.planning_time + exp_details.buffer_time)
+            start_time = time()
+        end
         time_duration_until_next_action_is_applied =  pomdp_details.planning_time + exp_details.buffer_time
         current_sim_obj = simulate_vehicle_and_humans!(current_sim_obj, current_vehicle_steering_angle, current_vehicle_speed,
                                                 current_time_value, time_duration_until_next_action_is_applied, exp_details, output)
@@ -261,6 +221,11 @@ function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, o
         current_vehicle_steering_angle = next_action.steering_angle
         current_action = next_action
         current_time_value += time_duration_until_next_action_is_applied
+        if(debug)
+            println("Finished simulation")
+            time_taken = time() - start_time
+            println("Time Taken : ", time_taken)
+        end
         #=
         Store relevant values in exp_details
         =#

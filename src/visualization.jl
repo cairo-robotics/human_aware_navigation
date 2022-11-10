@@ -46,7 +46,7 @@ function get_plot(env,vehicle,vehicle_params,nearby_humans,sensor_data,time_valu
         human_reached_goal = (human.x == human.goal.x) && (human.y == human.goal.y)
         if(is_nearby_human)
             scatter!([human.x],[human.y],color="red")
-            # annotate!(human.x, human.y, text(string(human_id), :purple, :right, 15))
+            annotate!(human.x, human.y, text(string(human_id), :purple, :right, 15))
             plot!(circleShape(human.x,human.y,exp_details.max_risk_distance), lw=0.5, linecolor = :black,
                                                 legend=false, fillalpha=0.2, aspect_ratio=1,c= :red, seriestype = [:shape,])
             human_heading_angle = get_heading_angle(human.goal.x, human.goal.y,human.x,human.y)
@@ -63,9 +63,11 @@ function get_plot(env,vehicle,vehicle_params,nearby_humans,sensor_data,time_valu
 
     #Plot Vehicle
     # scatter!([vehicle.x], [vehicle.y], shape=:circle, color="grey")
-    plot!(circleShape(vehicle.x,vehicle.y,vehicle_params.L), lw=0.5, linecolor = :black,
+    vehicle_center_x = vehicle.x + vehicle_params.dist_origin_to_center*cos(vehicle.theta)
+    vehicle_center_y = vehicle.y + vehicle_params.dist_origin_to_center*sin(vehicle.theta)
+    plot!(circleShape(vehicle_center_x,vehicle_center_y,vehicle_params.radius), lw=0.5, linecolor = :black,
                             legend=false, fillalpha=0.2, aspect_ratio=1,c= :grey, seriestype = [:shape,])
-    quiver!([vehicle.x],[vehicle.y],quiver=([cos(vehicle.theta)],[sin(vehicle.theta)]), color="grey")
+    quiver!([vehicle_center_x],[vehicle_center_y],quiver=([cos(vehicle.theta)],[sin(vehicle.theta)]), color="grey")
 
     #Plot Vehicle Goal
     annotate!(vehicle_params.goal.x, vehicle_params.goal.y, text("G", :darkgreen, :right, 10))

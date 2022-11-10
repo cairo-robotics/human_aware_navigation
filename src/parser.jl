@@ -11,11 +11,14 @@ function POMPDPlanningDetails(obj)
         obj.obstacle_collision_penalty, #=obstacle_collision_penalty::Float64=#
         obj.goal_reached_reward, #=goal_reached_reward::Float64=#
         obj.veh_max_speed, #=max_vehicle_speed::Float64=#
+        obj.veh_max_steering_angle, #=max_vehicle_steering_angle::Float64=#
         obj.num_segments_in_one_time_step, #=num_segments_in_one_time_step::Int64=#
         obj.observation_discretization_length, #=observation_discretization_length::Float64=#
         obj.d_near, #=d_near::Float64=#
         obj.d_far, #=d_far::Float64=#
         obj.pomdp_planning_time, #=planning_time::Float64=#
+        obj.pomdp_action_delta_speed, #=action_delta_speed::Float64=#
+        obj.pomdp_action_max_delta_heading_angle, #=action_max_delta_heading_angle::Float64=#
         obj.tree_search_max_depth, #=tree_search_max_depth::Int64=#
         obj.num_scenarios, #=num_scenarios::Int64=#
         obj.pomdp_discount_factor, #=discount_factor::Float64=#

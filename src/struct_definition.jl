@@ -59,15 +59,25 @@ end
 # vsd = VehicleSensor(HumanState[], Int64[], HumanGoalsBelief[])
 
 struct VehicleParametersESPlanner
-    L::Float64
+    wheelbase::Float64
+    length::Float64
+    breadth::Float64
+    dist_origin_to_center::Float64
+    radius::Float64
     max_speed::Float64
+    max_steering_angle::Float64
     goal::Location
 end
 # vp_es = VehicleParametersESPlanner(0.3,3.0,Location(100.0,100.0))
 
 struct VehicleParametersLSPlanner
-    L::Float64
+    wheelbase::Float64
+    length::Float64
+    breadth::Float64
+    dist_origin_to_center::Float64
+    radius::Float64
     max_speed::Float64
+    max_steering_angle::Float64
     goal::Location
     controls_sequence::Array{Float64,1}
     index::Int64
@@ -122,15 +132,26 @@ mutable struct POMPDPlanningDetails
     obstacle_collision_penalty::Float64
     goal_reached_reward::Float64
     max_vehicle_speed::Float64
+    max_vehicle_steering_angle::Float64
     num_segments_in_one_time_step::Int64
     observation_discretization_length::Float64
     d_near::Float64
     d_far::Float64
     planning_time::Float64
+    action_delta_speed::Float64
+    action_max_delta_heading_angle::Float64
     tree_search_max_depth::Int64
     num_scenarios::Int64
     discount_factor::Float64
     one_time_step::Float64
+end
+
+struct HJBPlanningDetails
+    Dt::Float64
+    max_solve_steps::Int64
+    Dval_tol::Float64
+    max_vehicle_steering_angle::Float64
+    max_vehicle_speed::Float64
 end
 
 @with_kw mutable struct InputParameters
@@ -146,8 +167,12 @@ end
     veh_start_v::Float64 = 0.0
     veh_goal_x::Float64 = 2.759
     veh_goal_y::Float64 = 11.0
-    veh_L::Float64 = 0.3
-    veh_max_speed::Float64 = 3.0
+    veh_wheelbase::Float64 = 0.3
+    veh_length::Float64 = 0.5207
+    veh_breadth::Float64 = 0.2762
+    veh_dist_origin_to_center::Float64 = 0.1715
+    veh_max_speed::Float64 = 2.0
+    veh_max_steering_angle = 0.475
     veh_path_planning_v::Float64 = 1.0
     lidar_range::Float64 = 30.0
     num_nearby_humans::Int64 = 6
@@ -167,6 +192,8 @@ end
     d_near::Float64 = 0.5
     d_far::Float64 = 0.5
     pomdp_planning_time::Float64 = 0.3
+    pomdp_action_max_delta_heading_angle::Float64 = pi/4
+    pomdp_action_delta_speed::Float64 = 0.5
     one_time_step::Float64 = 0.5
     simulator_time_step::Float64 = 0.1
     update_sensor_data_time_interval::Float64 = 0.1

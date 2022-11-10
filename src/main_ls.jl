@@ -6,36 +6,34 @@ elseif user == "Will"
     Pkg.activate("/Users/willpope/.julia/dev/BellmanPDEs")
 end
 using BellmanPDEs
-using JLD2
+using BSON: @save, @load
 using ProfileView
 using Revise
 include("struct_definition.jl")
 include("environment.jl")
 include("utils.jl")
-include("ES_POMDP_Planner.jl")
+include("hybrid_astar.jl")
+include("LS_POMDP_Planner.jl")
 include("belief_tracker.jl")
 include("simulator.jl")
 include("parser.jl")
 include("visualization.jl")
-include("HJB_wrappers.jl")
 include("aspen_inputs.jl")
-# include("aspen_inputs2.jl")
+include("aspen_inputs2.jl")
 include("small_obstacles_20x20.jl")
-# include("no_obstacles_big.jl")
+include("no_obstacles_big.jl")
 
 #Initialization
-# input_config = scenario1_big
-# input_config = aspen2
+input_config = scenario1_big
+input_config = aspen
+input_config = aspen2
 input_config = small_obstacles_20x20
-# input_config = aspen
 
 #=
 Define experiment details and POMDP planning details
 =#
 pomdp_details = POMPDPlanningDetails(input_config)
 exp_details = ExperimentDetails(input_config)
-# path_planning_details =
-
 output = OutputObj()
 
 #=
@@ -51,11 +49,7 @@ Define Vehicle
 veh = Vehicle(input_config.veh_start_x, input_config.veh_start_y, input_config.veh_start_theta, input_config.veh_start_v)
 veh_sensor_data = VehicleSensor(HumanState[],Int64[],HumanGoalsBelief[])
 veh_goal = Location(input_config.veh_goal_x,input_config.veh_goal_y)
-# veh_params = VehicleParametersESPlanner(input_config.veh_L,input_config.veh_max_speed,veh_goal)
-r = sqrt( (0.5*input_config.veh_length)^2 + (0.5*input_config.veh_breadth)^2 )
-veh_params = VehicleParametersESPlanner(input_config.veh_wheelbase,input_config.veh_length,
-input_config.veh_breadth,input_config.veh_dist_origin_to_center, r,
-input_config.veh_max_speed,input_config.veh_max_steering_angle,veh_goal)
+veh_params = VehicleParametersLSPlanner(input_config.veh_L,input_config.veh_max_speed,veh_goal,Float64[],0)
 
 #=
 Define Humans
@@ -69,34 +63,24 @@ Create sim object
 initial_sim_obj = Simulator(env,veh,veh_params,veh_sensor_data,env_humans,env_humans_params,exp_details.simulator_time_step)
 
 #=
-Solve HJB equation for the given environment and vehicle.
+Find hybrid A* path for the given environment and vehicle.
 =#
-Dt = 0.5
-max_solve_steps = 200
-Dval_tol = 0.1
-HJB_planning_details = HJBPlanningDetails(Dt, max_solve_steps, Dval_tol, veh_params.max_steering_angle, veh_params.max_speed)
-policy_path = "/home/himanshu/Documents/Research/human_aware_navigation/src"
-solve_HJB = true
-solve_HJB = false
-if(solve_HJB)
-    println("Solving HJB equation for given environment ....")
-    rollout_guide = HJBPolicy(HJB_planning_details, exp_details, veh_params)
-    d = Dict("rollout_guide"=>rollout_guide)
-    save("./src/HJB_rollout_guide.jld2",d)
-else
-    s = load("./src/HJB_rollout_guide.jld2")
-    rollout_guide = s["rollout_guide"]
-end
+nbh = NearbyHumans(HumanState[], Int64[], HumanGoalsBelief[])
+vsd = VehicleSensor(HumanState[], Int64[], HumanGoalsBelief[])
+va = get_vehicle_actions(45,15)
+pd = PathPlanningDetails(0,20.0,1.0,100.0,Location[],1.0,1.0,0.99,0.5,1.0)
+vehicle_controls_sequence = hybrid_astar_search(env,veh,veh_params,va,nbh,pd);
+new_vp = VehicleParametersLSPlanner(vp.L,vp.max_speed,vp.goal,vehicle_controls_sequence,1)
+rollout_guide = HybridAStarPolicy(vehicle_controls_sequence,length(vehicle_controls_sequence))
 
 #=
 Define POMDP, POMDP Solver and POMDP Planner
 =#
-extended_space_pomdp = ExtendedSpacePOMDP(pomdp_details,env,veh_params,rollout_guide)
-pomdp_solver = DESPOTSolver(bounds=IndependentBounds(DefaultPolicyLB(FunctionPolicy(b->calculate_lower_bound(extended_space_pomdp, b)),max_depth=pomdp_details.tree_search_max_depth),
+planning_pomdp = LimitedSpacePOMDP(pomdp_details,exp_details,veh_params,rollout_guide)
+pomdp_solver = DESPOTSolver(bounds=IndependentBounds(DefaultPolicyLB(FunctionPolicy(b->calculate_lower_bound(planning_pomdp, b)),max_depth=pomdp_details.tree_search_max_depth),
                     calculate_upper_bound,check_terminal=true,consistency_fix_thresh=1e-5),K=pomdp_details.num_scenarios,D=pomdp_details.tree_search_max_depth,
-                    T_max=pomdp_details.planning_time*6,tree_in_info=true,default_action=default_es_pomdp_action)
-# default_action=ActionExtendedSpacePOMDP(0.0,0.0)
-pomdp_planner = POMDPs.solve(pomdp_solver, extended_space_pomdp);
+                    T_max=pomdp_details.planning_time,tree_in_info=true)
+pomdp_planner = POMDPs.solve(pomdp_solver, planning_pomdp);
 
 #Run the experiment
 run_experiment!(initial_sim_obj, pomdp_planner, exp_details, pomdp_details, output)
@@ -107,7 +91,6 @@ Print useful values from the experiment
 
 #Create Gif
 create_gif = true
-# create_gif = false
 if(create_gif)
     anim = @animate for k ∈ keys(output.sim_objects)
         # observe(output, path_planning_details, exp_details, k);
@@ -115,8 +98,3 @@ if(create_gif)
     end
     gif(anim, "es_planner.gif", fps = 10)
 end
-
-
-# nbh = NearbyHumans(HumanState[], Int64[], HumanGoalsBelief[])
-# vsd = VehicleSensor(HumanState[], Int64[], HumanGoalsBelief[])
-# get_plot(env, veh, veh_params, nbh, vsd, 0.0, exp_details)

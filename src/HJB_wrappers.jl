@@ -3,21 +3,13 @@ using LazySets
 using GridInterpolations
 using StaticArraysCore
 
-struct HJBPlanningDetails
-    Dt::Float64
-    max_solve_steps::Int64
-    Dval_tol::Float64
-    max_steering_angle::Float64
-    max_vehicle_speed::Float64
-end
-
 function get_HJB_environment(vehicle_params,exp_details)
 
     world = exp_details.env
     workspace = VPolygon([[0.0, 0.0], [world.length, 0.0], [world.length, world.breadth], [0.0, world.breadth]])
     obstacle_list = Array{Any,1}()
     for obs in world.obstacles
-        push!(obstacle_list, VPolyCircle([obs.x,obs.y], obs.r))
+        push!(obstacle_list, VPolyCircle([obs.x,obs.y], obs.r+0.1))
     end
     goal = VPolyCircle([vehicle_params.goal.x, vehicle_params.goal.y], exp_details.radius_around_vehicle_goal)
     env = define_environment(workspace, obstacle_list, goal)
@@ -25,16 +17,15 @@ function get_HJB_environment(vehicle_params,exp_details)
 end
 
 function get_HJB_vehicle(vehicle_params)
-    wheelbase = vehicle_params.L
-    body_dims = [0.5207, 0.2762]
-    origin_to_cent = [0.1715, 0.0]
-    veh = define_vehicle(wheelbase, body_dims, origin_to_cent)
-    return veh
+    body_dims = [vehicle_params.length, vehicle_params.breadth]
+    origin_to_cent = [vehicle_params.dist_origin_to_center, 0.0]
+    veh_body = define_vehicle(vehicle_params.wheelbase, body_dims, origin_to_cent, vehicle_params.max_steering_angle, vehicle_params.max_speed)
+    return veh_body
 end
 
 function get_state_grid(world, vehicle_params)
     state_space = [[0.0, world.length], [0.0, world.breadth], [-pi, pi], [0.0, vehicle_params.max_speed]]
-    dx_sizes = [0.5, 0.5, deg2rad(15), 1/3]
+    dx_sizes = [0.25, 0.25, deg2rad(15), 1/3]
     angle_wrap = [false, false, true, false]
     sg = define_state_grid(state_space, dx_sizes, angle_wrap)
     return sg
@@ -124,9 +115,14 @@ function rollout_get_actions(x, Dt, veh)
     return actions,ia_set
 end
 
-function rollout_get_cost(x, a, Dt)
-    # cost_k = Dt
-    return Dt
+function rollout_get_cost(x, a, Dt, veh)
+    # reward_x_a = 0
+    # low speed penalty
+    # reward_x_a += -(veh.v_max - abs(x[4] + a[2]))/veh.v_max
+    # time penalty
+    # reward_x_a += -1.0
+    # return reward_x_a
+    return -Dt
 end
 
 function HJBPolicy(HJB_planning_details, exp_details, vehicle_params)
