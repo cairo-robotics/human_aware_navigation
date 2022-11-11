@@ -41,7 +41,7 @@ small_obstacles_20x20 =  InputParameters(
     0.5, #=pomdp_action_delta_speed::Float64=#
     0.5, #=one_time_step::Float64=#
     0.1, #=simulator_time_step::Float64=#
-    0.1, #=update_sensor_data_time_interval::Float64=#
+    0.2, #=update_sensor_data_time_interval::Float64=#
     0.2, #=buffer_time::Float64=#
     50.0 #=MAX_TIME_LIMIT::Float64=#
 )

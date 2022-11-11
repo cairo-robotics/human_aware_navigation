@@ -7,7 +7,7 @@ function circleShape(h,k,r)
     h .+ r*sin.(theta), k .+ r*cos.(theta)
 end
 
-function get_plot(env,vehicle,vehicle_params,nearby_humans,sensor_data,time_value,exp_details)
+function get_plot(env,vehicle,vehicle_params,humans,humans_params,sensor_data,nearby_humans,time_value,exp_details)
 
     plot_size = 1000; #number of pixels
     boundary_padding = 0.5
@@ -38,26 +38,39 @@ function get_plot(env,vehicle,vehicle_params,nearby_humans,sensor_data,time_valu
         # scatter!([obs.x],[obs.y],color="black",shape=:circle,msize=plot_size*obs.r/env.length)
     end
 
-    #Plot humans in lidar data (nearby humans in red, rest in blue)
-    for i in 1:length(sensor_data.lidar_data)
-        human = sensor_data.lidar_data[i]
-        human_id = sensor_data.ids[i]
-        is_nearby_human = !(length(findall(x->x==human_id, nearby_humans.ids)) == 0)
+    #=
+    Plot humans!
+    Go through all the humans in the current sim object
+    If that human is a nearby human, display it in red
+    If that human is in sensor data, display it in blue
+    If neither of that is true, it is outside the lidar range, ignore it!
+    =#
+    for i in 1:length(humans)
+        human = humans[i]
+        human_id = humans_params[i].id
         human_reached_goal = (human.x == human.goal.x) && (human.y == human.goal.y)
+        if(human_reached_goal)
+            continue
+        end
+        is_nearby_human = !(length(findall(x->x==human_id, nearby_humans.ids)) == 0)
         if(is_nearby_human)
             scatter!([human.x],[human.y],color="red")
             Plots.annotate!(human.x, human.y, text(string(human_id), :purple, :right, 15))
             plot!(circleShape(human.x,human.y,exp_details.max_risk_distance), lw=0.5, linecolor = :black,
                                                 legend=false, fillalpha=0.2, aspect_ratio=1,c= :red, seriestype = [:shape,])
-            human_heading_angle = get_heading_angle(human.goal.x, human.goal.y,human.x,human.y)
+            # human_heading_angle = get_heading_angle(human.goal.x,human.goal.y,human.x,human.y)
             # quiver!([human.x],[human.y],quiver=([cos(human_heading_angle)],[sin(human_heading_angle)]), color="red")
-        elseif(!human_reached_goal)
+            continue
+        end
+        is_sensor_data_human = !(length(findall(x->x==human_id, sensor_data.ids)) == 0)
+        if(is_sensor_data_human)
             scatter!([human.x],[human.y],color="lightblue")
             # annotate!(human.x, human.y, text(string(human_id), :purple, :right, 15))
             plot!(circleShape(human.x,human.y,exp_details.max_risk_distance), lw=0.5, linecolor = :black,
                                                 legend=false, fillalpha=0.2, aspect_ratio=1,c= :lightblue, seriestype = [:shape,])
-            human_heading_angle = get_heading_angle(human.goal.x, human.goal.y,human.x,human.y)
+            # human_heading_angle = get_heading_angle(human.goal.x,human.goal.y,human.x,human.y)
             # quiver!([human.x],[human.y],quiver=([cos(human_heading_angle)],[sin(human_heading_angle)]), color="green")
+            continue
         end
     end
 
@@ -216,13 +229,16 @@ function observe(output,path_planning_details,exp_details,time_value, x_subpath)
     e = output.sim_objects[time_value].env
     v = output.sim_objects[time_value].vehicle
     vp = output.sim_objects[time_value].vehicle_params
-    nbh = output.nearby_humans[time_value]
+    h = output.sim_objects[time_value].humans
+    hp = output.sim_objects[time_value].humans_params
     sd = output.sim_objects[time_value].vehicle_sensor_data
+    nbh = output.nearby_humans[time_value]
 
     x_k = [v.x, v.y, v.theta, v.v]
     push!(x_subpath, x_k)
 
     p = get_plot_will_version(e, v, vp, nbh, sd, time_value, exp_details, x_subpath)
+    # p = get_plot(e,v,vp,h,hp,sd,nbh,time_value,exp_details)
 
     if(hasfield(typeof(vp),:controls_sequence))
         vehicle_path_x, vehicle_path_y, vehicle_path_theta  = get_vehicle_trajectory(v,vp,time_value,path_planning_details,exp_details)
