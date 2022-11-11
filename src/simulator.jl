@@ -141,14 +141,14 @@ function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, o
     output.sim_objects[current_time_value] = current_sim_obj
     nbh = NearbyHumans(HumanState[], Int64[], HumanGoalsBelief[])
     output.nearby_humans[current_time_value] = nbh
-    debug = true
+    debug = false
     start_time = time()
     # try
     while(!stop_simulation!(current_sim_obj,current_time_value,exp_details,output))
 
         state_array = [current_sim_obj.vehicle.x, current_sim_obj.vehicle.y, current_sim_obj.vehicle.theta, current_sim_obj.vehicle.v]
         action_array = [current_action.steering_angle, current_action.delta_speed]
-        println("Time = ", current_time_value,
+        println("\nTime = ", current_time_value,
               "\t State = ", round.(state_array, digits=3),
               "\t Action = ", round.(action_array, digits=3))
         #=
@@ -196,7 +196,18 @@ function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, o
                                 current_sim_obj.env.length,current_sim_obj.env.breadth,time_duration_until_pomdp_action_determined)
             output.nearby_humans[current_time_value] = nbh
             output.b_root[current_time_value] = b
-            next_action, info = action_info(planner, b)
+            next_pomdp_action, info = action_info(planner, b)
+
+            # shielding
+            println("POMDP requested action = ", [next_pomdp_action.steering_angle, next_pomdp_action.delta_speed])
+            next_action = nothing
+            if(length(info[:tree].children[1]) != 0)
+                next_action = best_shield_action(predicted_vehicle_state,nbh.position_data,0.0,exp_details.one_time_step,get_shield_actions,
+                        veh_body,exp_details.human_goal_locations,planner.pomdp,info[:tree],exp_details.user_defined_rng)
+            else
+                next_action = next_pomdp_action
+            end
+
             if(debug)
                 println("Finished POMDP planning. Action selected")
                 time_taken = time() - start_time

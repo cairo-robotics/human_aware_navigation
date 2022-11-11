@@ -18,6 +18,7 @@ include("simulator.jl")
 include("parser.jl")
 include("visualization.jl")
 include("HJB_wrappers.jl")
+include("shielding_utils.jl")
 include("aspen_inputs.jl")
 # include("aspen_inputs2.jl")
 include("small_obstacles_20x20.jl")
@@ -54,9 +55,11 @@ veh_goal = Location(input_config.veh_goal_x,input_config.veh_goal_y)
 # veh_params = VehicleParametersESPlanner(input_config.veh_L,input_config.veh_max_speed,veh_goal)
 r = sqrt( (0.5*input_config.veh_length)^2 + (0.5*input_config.veh_breadth)^2 )
 veh_params = VehicleParametersESPlanner(input_config.veh_wheelbase,input_config.veh_length,
-input_config.veh_breadth,input_config.veh_dist_origin_to_center, r,
-input_config.veh_max_speed,input_config.veh_max_steering_angle,veh_goal)
-
+                input_config.veh_breadth,input_config.veh_dist_origin_to_center, r,
+                input_config.veh_max_speed,input_config.veh_max_steering_angle,veh_goal)
+body_dims = [veh_params.length, veh_params.breadth]
+origin_to_cent = [veh_params.dist_origin_to_center, 0.0]
+veh_body = define_vehicle(veh_params.wheelbase, body_dims, origin_to_cent, veh_params.max_steering_angle, veh_params.max_speed)
 #=
 Define Humans
 =#
@@ -76,7 +79,7 @@ max_solve_steps = 200
 Dval_tol = 0.1
 HJB_planning_details = HJBPlanningDetails(Dt, max_solve_steps, Dval_tol, veh_params.max_steering_angle, veh_params.max_speed)
 policy_path = "/home/himanshu/Documents/Research/human_aware_navigation/src"
-solve_HJB = true
+# solve_HJB = true
 solve_HJB = false
 if(solve_HJB)
     println("Solving HJB equation for given environment ....")
