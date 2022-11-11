@@ -1,5 +1,5 @@
 using Pkg
-user = "Himanshu"
+user = "Will"
 if user == "Himanshu"
     Pkg.activate("/home/himanshu/Documents/Research/BellmanPDEs.jl/")
 elseif user == "Will"
@@ -76,7 +76,7 @@ max_solve_steps = 200
 Dval_tol = 0.1
 HJB_planning_details = HJBPlanningDetails(Dt, max_solve_steps, Dval_tol, veh_params.max_steering_angle, veh_params.max_speed)
 policy_path = "/home/himanshu/Documents/Research/human_aware_navigation/src"
-solve_HJB = true
+# solve_HJB = true
 solve_HJB = false
 if(solve_HJB)
     println("Solving HJB equation for given environment ....")
@@ -109,9 +109,11 @@ Print useful values from the experiment
 create_gif = true
 # create_gif = false
 if(create_gif)
+    x_path = []
+    x_subpath = []
     anim = @animate for k ∈ keys(output.sim_objects)
         # observe(output, path_planning_details, exp_details, k);
-        observe(output, exp_details, exp_details, k);
+        observe(output, exp_details, exp_details, k, x_subpath);
     end
     gif(anim, "es_planner.gif", fps = 10)
 end

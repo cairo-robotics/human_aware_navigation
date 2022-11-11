@@ -25,7 +25,7 @@ end
 
 function get_state_grid(world, vehicle_params)
     state_space = [[0.0, world.length], [0.0, world.breadth], [-pi, pi], [0.0, vehicle_params.max_speed]]
-    dx_sizes = [0.25, 0.25, deg2rad(15), 1/3]
+    dx_sizes = [0.5, 0.5, deg2rad(18.0), 1/3]
     angle_wrap = [false, false, true, false]
     sg = define_state_grid(state_space, dx_sizes, angle_wrap)
     return sg
