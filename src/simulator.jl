@@ -189,6 +189,7 @@ function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, o
                 println("Starting POMDP planning")
                 start_time = time()
             end
+            # observes environment at t_k
             nbh = get_nearby_humans(current_sim_obj,pomdp_details.num_nearby_humans,pomdp_details.min_safe_distance_from_human,
                                                     pomdp_details.cone_half_angle)
             b = TreeSearchScenarioParameters(predicted_vehicle_state.x,predicted_vehicle_state.y,predicted_vehicle_state.theta,predicted_vehicle_state.v,
@@ -196,15 +197,23 @@ function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, o
                                 current_sim_obj.env.length,current_sim_obj.env.breadth,time_duration_until_pomdp_action_determined)
             output.nearby_humans[current_time_value] = nbh
             output.b_root[current_time_value] = b
+
+            # runs DESPOT to calculate action for t_k1
             next_pomdp_action, info = action_info(planner, b)
 
-            # shielding
+            # ISSUE: need to generate nbh @ t_k1 to use in shield
+            #   - may also want more humans in observation (closest 12 humans?)
+
+            # runs shielding to find best safe action for t_k1
             println("POMDP requested action = ", [next_pomdp_action.steering_angle, next_pomdp_action.delta_speed])
+
             next_action = nothing
             if(length(info[:tree].children[1]) != 0)
-                next_action = best_shield_action(predicted_vehicle_state,nbh.position_data,0.0,exp_details.one_time_step,get_shield_actions,
-                        veh_body,exp_details.human_goal_locations,planner.pomdp,info[:tree],exp_details.user_defined_rng)
+                Dt_obs_to_k1 = 0.0
+                next_action = get_best_shielded_action(predicted_vehicle_state, nbh.position_data, Dt_obs_to_k1, exp_details.one_time_step, 
+                    shield_get_actions, veh_body, exp_details.human_goal_locations, planner.pomdp, info[:tree], exp_details.user_defined_rng)
             else
+                # ISSUE: need to deal with default action empty tree problem
                 next_action = next_pomdp_action
             end
 

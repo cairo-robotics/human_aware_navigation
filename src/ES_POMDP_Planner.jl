@@ -1001,6 +1001,9 @@ end
 ************************************************************************************************
 Action Function for the POMDP
 =#
+
+# ISSUE: need to modify steering angles with +/-Dv in here
+
 function get_actions(m::ExtendedSpacePOMDP{HJBPolicy},b)
     max_steering_angle = m.max_vehicle_steering_angle
     max_delta_angle = m.vehicle_action_max_delta_heading_angle

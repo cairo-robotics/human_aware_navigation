@@ -1,4 +1,5 @@
 using Plots
+using UnicodePlots
 using D3Trees
 
 #Function to display a circle
@@ -234,7 +235,7 @@ function observe(output,path_planning_details,exp_details,time_value, x_subpath)
     sd = output.sim_objects[time_value].vehicle_sensor_data
     nbh = output.nearby_humans[time_value]
 
-    x_k = [v.x, v.y, v.theta, v.v]
+    x_k = [v.x, v.y, wrap_between_negative_pi_to_pi(v.theta), v.v]
     push!(x_subpath, x_k)
 
     p = get_plot_will_version(e, v, vp, nbh, sd, time_value, exp_details, x_subpath)

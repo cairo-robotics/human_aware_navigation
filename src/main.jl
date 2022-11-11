@@ -2,10 +2,13 @@ using Pkg
 user = "Will"
 if user == "Himanshu"
     Pkg.activate("/home/himanshu/Documents/Research/BellmanPDEs.jl/")
+    include("/home/himanshu/Documents/Research/marmot-algs/tree-shielding/shield_functions.jl")
 elseif user == "Will"
     Pkg.activate("/Users/willpope/.julia/dev/BellmanPDEs")
+    include("/Users/willpope/Desktop/Research/marmot-algs/tree-shielding/shield_functions.jl")
 end
 using BellmanPDEs
+using LazySets
 using JLD2
 using ProfileView
 using Revise
@@ -18,13 +21,16 @@ include("simulator.jl")
 include("parser.jl")
 include("visualization.jl")
 include("HJB_wrappers.jl")
-include("shielding_utils.jl")
-include("aspen_inputs.jl")
+include("shield_wrappers.jl")
+
+# include("aspen_inputs.jl")
 # include("aspen_inputs2.jl")
 include("small_obstacles_20x20.jl")
 # include("no_obstacles_big.jl")
 
-#Initialization
+#=
+Initialization
+=#
 # input_config = scenario1_big
 # input_config = aspen2
 input_config = small_obstacles_20x20
@@ -72,7 +78,7 @@ Create sim object
 initial_sim_obj = Simulator(env,veh,veh_params,veh_sensor_data,env_humans,env_humans_params,exp_details.simulator_time_step)
 
 #=
-Solve HJB equation for the given environment and vehicle.
+Solve HJB equation for the given environment and vehicle
 =#
 Dt = 0.5
 max_solve_steps = 200
@@ -101,14 +107,18 @@ pomdp_solver = DESPOTSolver(bounds=IndependentBounds(DefaultPolicyLB(FunctionPol
 # default_action=ActionExtendedSpacePOMDP(0.0,0.0)
 pomdp_planner = POMDPs.solve(pomdp_solver, extended_space_pomdp);
 
-#Run the experiment
+#=
+Run the experiment
+=#
 run_experiment!(initial_sim_obj, pomdp_planner, exp_details, pomdp_details, output)
 
 #=
 Print useful values from the experiment
 =#
 
-#Create Gif
+#=
+Create Gif
+=#
 create_gif = true
 # create_gif = false
 if(create_gif)
