@@ -95,6 +95,8 @@ function shield_action_set(x_k1, nearby_human_positions, Dt_obs_to_k1, Dt_plan, 
                 #       - test theta conversions by setting initial angle to something in fourth quadrant -> works
                 #       - test UBx collision checking when x_stop in static unsafe set -> works
 
+                # NOTE: can remove all safe_HJB_value_lim
+
                 # check if divert stop point is in static unsafe set (NEW)
                 if kd == kd_stop
                     val_x_stop = calculate_upper_bound_x(m, x_kd)

@@ -1,5 +1,5 @@
 small_obstacles_20x20 =  InputParameters(
-    MersenneTwister(11), #=rng::AbstractRNG=#
+    MersenneTwister(), #=rng::AbstractRNG=#
     20.0, #=env_length::Float64=#
     20.0, #=env_breadth::Float64=#
     ObstacleLocation[ObstacleLocation(5.125,4.875,1.125), ObstacleLocation(6.5,15.25,1.5),
@@ -41,7 +41,7 @@ small_obstacles_20x20 =  InputParameters(
     0.5, #=pomdp_action_delta_speed::Float64=#
     0.5, #=one_time_step::Float64=#
     0.1, #=simulator_time_step::Float64=#
-    0.2, #=update_sensor_data_time_interval::Float64=#
+    0.1, #=update_sensor_data_time_interval::Float64=#
     0.2, #=buffer_time::Float64=#
     50.0 #=MAX_TIME_LIMIT::Float64=#
 )
