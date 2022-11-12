@@ -2,10 +2,8 @@ using Pkg
 user = "Will"
 if user == "Himanshu"
     Pkg.activate("/home/himanshu/Documents/Research/BellmanPDEs.jl/")
-    include("/home/himanshu/Documents/Research/marmot-algs/tree-shielding/shield_functions.jl")
 elseif user == "Will"
     Pkg.activate("/Users/willpope/.julia/dev/BellmanPDEs")
-    include("/Users/willpope/Desktop/Research/marmot-algs/tree-shielding/shield_functions.jl")
 end
 using BellmanPDEs
 using LazySets
@@ -21,12 +19,13 @@ include("simulator.jl")
 include("parser.jl")
 include("visualization.jl")
 include("HJB_wrappers.jl")
-include("shield_wrappers.jl")
+include("shielding/shield.jl")
+include("shielding/shield_wrappers.jl")
 
-# include("aspen_inputs.jl")
-# include("aspen_inputs2.jl")
-include("small_obstacles_20x20.jl")
-# include("no_obstacles_big.jl")
+# include("env_inputs/aspen_inputs.jl")
+# include("env_inputs/aspen_inputs2.jl")
+include("env_inputs/small_obstacles_20x20.jl")
+# include("env_inputs/no_obstacles_big.jl")
 
 #=
 Initialization

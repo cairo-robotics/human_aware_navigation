@@ -614,7 +614,7 @@ function calculate_upper_bound(m::ExtendedSpacePOMDP{HJBPolicy}, b)
     else
         s = first(particles(b))
         x = SVector(s.vehicle_x, s.vehicle_y, s.vehicle_theta, s.vehicle_v)
-        a, q_vals = HJB_policy(SVector(x[1],x[2],wrap_between_negative_pi_to_pi(x[3]),x[4]),0.5,800.0,m.rollout_guide.get_actions,
+        a, q_vals = HJB_policy(SVector(x[1],x[2],wrap_between_negative_pi_to_pi(x[3]),x[4]),0.5,750.0,m.rollout_guide.get_actions,
                     m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,m.rollout_guide.value_array,m.rollout_guide.veh,
                     m.rollout_guide.state_grid)
         i = 0
@@ -626,7 +626,7 @@ function calculate_upper_bound(m::ExtendedSpacePOMDP{HJBPolicy}, b)
             new_x, r =  upper_bound_rollout_gen(m, x, a)
             value_sum += r
             x = new_x
-            a, q_vals = HJB_policy(SVector(x[1],x[2],wrap_between_negative_pi_to_pi(x[3]),x[4]),0.5,800.0,m.rollout_guide.get_actions,
+            a, q_vals = HJB_policy(SVector(x[1],x[2],wrap_between_negative_pi_to_pi(x[3]),x[4]),0.5,750.0,m.rollout_guide.get_actions,
                         m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,m.rollout_guide.value_array,m.rollout_guide.veh,
                         m.rollout_guide.state_grid)
 
@@ -681,8 +681,9 @@ function calculate_lower_bound(m::ExtendedSpacePOMDP{HJBPolicy},b)
                     end
                     if(dist_to_closest_human < m.d_near)
                         delta_speed = -delta_speed
+                        safe_value_lim = 750.0
                         a, q_vals = reactive_policy(SVector(s.vehicle_x,s.vehicle_y,wrap_between_negative_pi_to_pi(s.vehicle_theta),s.vehicle_v),delta_speed,
-                            800.0,m.rollout_guide.get_actions,m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,
+                            safe_value_lim,m.rollout_guide.get_actions,m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,
                             m.rollout_guide.value_array,m.rollout_guide.veh,m.rollout_guide.state_grid)
                         if(debug)
                             println("Near a Human")
@@ -711,8 +712,9 @@ function calculate_lower_bound(m::ExtendedSpacePOMDP{HJBPolicy},b)
         return ActionExtendedSpacePOMDP(0.0,0.0)
     end
     s = first(particles(b))
+    safe_value_lim = 750.0
     a, q_vals = reactive_policy(SVector(s.vehicle_x,s.vehicle_y,wrap_between_negative_pi_to_pi(s.vehicle_theta),s.vehicle_v),delta_speed,
-        800.0,m.rollout_guide.get_actions,m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,
+        safe_value_lim,m.rollout_guide.get_actions,m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,
         m.rollout_guide.value_array,m.rollout_guide.veh,m.rollout_guide.state_grid)
     if(debug)
         @show(delta_speed)
@@ -1023,7 +1025,7 @@ function get_actions(m::ExtendedSpacePOMDP{HJBPolicy},b)
     elseif(pomdp_state.vehicle_v == m.max_vehicle_speed)
         steering_angle = clamp(get_steering_angle(m.vehicle_wheelbase,max_delta_angle,pomdp_state.vehicle_v,m.one_time_step),0.0,max_steering_angle)
         rollout_action, q_vals = reactive_policy(SVector(pomdp_state.vehicle_x,pomdp_state.vehicle_y,wrap_between_negative_pi_to_pi(pomdp_state.vehicle_theta),pomdp_state.vehicle_v),
-                                delta_speed,800.0,m.rollout_guide.get_actions, m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,
+                                delta_speed,750.0,m.rollout_guide.get_actions, m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,
                                 m.rollout_guide.value_array,m.rollout_guide.veh,m.rollout_guide.state_grid)
         return [
                 ActionExtendedSpacePOMDP(-steering_angle,0.0),
@@ -1042,7 +1044,7 @@ function get_actions(m::ExtendedSpacePOMDP{HJBPolicy},b)
     else
         steering_angle = clamp(get_steering_angle(m.vehicle_wheelbase,max_delta_angle,pomdp_state.vehicle_v,m.one_time_step),0.0,max_steering_angle)
         rollout_action, q_vals = reactive_policy(SVector(pomdp_state.vehicle_x,pomdp_state.vehicle_y,wrap_between_negative_pi_to_pi(pomdp_state.vehicle_theta),pomdp_state.vehicle_v),
-                                delta_speed,800.0,m.rollout_guide.get_actions, m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,
+                                delta_speed,750.0,m.rollout_guide.get_actions, m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,
                                 m.rollout_guide.value_array,m.rollout_guide.veh,m.rollout_guide.state_grid)
         return [ActionExtendedSpacePOMDP(-steering_angle,0.0),
                 ActionExtendedSpacePOMDP(-2*steering_angle/3,0.0),
@@ -1065,7 +1067,7 @@ function default_es_pomdp_action(m,b,ex)
     delta_speed = m.vehicle_action_delta_speed
     # pomdp_state = first(particles(b))
     rollout_action, q_vals = reactive_policy(SVector(b.vehicle_x,b.vehicle_y,wrap_between_negative_pi_to_pi(b.vehicle_theta),b.vehicle_v),
-                                delta_speed,800.0,m.rollout_guide.get_actions, m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,
+                                delta_speed,750.0,m.rollout_guide.get_actions, m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,
                                 m.rollout_guide.value_array,m.rollout_guide.veh,m.rollout_guide.state_grid)
     # println(ex)
     return ActionExtendedSpacePOMDP(rollout_action[1],rollout_action[2])

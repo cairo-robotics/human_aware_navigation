@@ -189,6 +189,7 @@ function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, o
                 println("Starting POMDP planning")
                 start_time = time()
             end
+
             # observes environment at t_k
             nbh = get_nearby_humans(current_sim_obj,pomdp_details.num_nearby_humans,pomdp_details.min_safe_distance_from_human,
                                                     pomdp_details.cone_half_angle)
@@ -202,7 +203,8 @@ function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, o
             next_pomdp_action, info = action_info(planner, b)
 
             # ISSUE: need to generate nbh @ t_k1 to use in shield
-            #   - may also want more humans in observation (closest 12 humans?)
+            #   - may also want more humans in observation (closest 8-10 humans?)
+            #   - seems like humans behind are still not being tracked
 
             # runs shielding to find best safe action for t_k1
             println("POMDP requested action = ", [next_pomdp_action.steering_angle, next_pomdp_action.delta_speed])
