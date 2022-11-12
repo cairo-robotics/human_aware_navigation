@@ -1,5 +1,5 @@
 using Pkg
-user = "Will"
+user = "Himanshu"
 if user == "Himanshu"
     Pkg.activate("/home/himanshu/Documents/Research/BellmanPDEs.jl/")
 elseif user == "Will"
@@ -41,7 +41,6 @@ Define experiment details and POMDP planning details
 pomdp_details = POMPDPlanningDetails(input_config)
 exp_details = ExperimentDetails(input_config)
 # path_planning_details =
-
 output = OutputObj()
 
 #=

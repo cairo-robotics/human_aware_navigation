@@ -180,7 +180,7 @@ function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, o
         modified_vehicle_params = modify_vehicle_params(current_sim_obj.vehicle_params)
         if(is_within_range(predicted_vehicle_state.x,predicted_vehicle_state.y,modified_vehicle_params.goal.x,modified_vehicle_params.goal.y,exp_details.radius_around_vehicle_goal))
             println("Predicted vehicle state is in goal")
-            next_action = ActionExtendedSpacePOMDP(0.0,0.0)
+            next_pomdp_action = ActionExtendedSpacePOMDP(0.0,0.0)
             output.nearby_humans[current_time_value] = nbh
             output.b_root[current_time_value] = nothing
             output.despot_trees[current_time_value] = nothing
@@ -202,23 +202,6 @@ function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, o
             # runs DESPOT to calculate action for t_k1
             next_pomdp_action, info = action_info(planner, b)
 
-            # ISSUE: need to generate nbh @ t_k1 to use in shield
-            #   - may also want more humans in observation (closest 8-10 humans?)
-            #   - seems like humans behind are still not being tracked
-
-            # runs shielding to find best safe action for t_k1
-            println("POMDP requested action = ", [next_pomdp_action.steering_angle, next_pomdp_action.delta_speed])
-
-            next_action = nothing
-            if(length(info[:tree].children[1]) != 0)
-                Dt_obs_to_k1 = 0.0
-                next_action = get_best_shielded_action(predicted_vehicle_state, nbh.position_data, Dt_obs_to_k1, exp_details.one_time_step, 
-                    shield_get_actions, veh_body, exp_details.human_goal_locations, planner.pomdp, info[:tree], exp_details.user_defined_rng)
-            else
-                # ISSUE: need to deal with default action empty tree problem
-                next_action = next_pomdp_action
-            end
-
             if(debug)
                 println("Finished POMDP planning. Action selected")
                 time_taken = time() - start_time
@@ -237,6 +220,20 @@ function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, o
         time_duration_until_next_action_is_applied =  pomdp_details.planning_time + exp_details.buffer_time
         current_sim_obj = simulate_vehicle_and_humans!(current_sim_obj, current_vehicle_steering_angle, current_vehicle_speed,
                                                 current_time_value, time_duration_until_next_action_is_applied, exp_details, output)
+
+        # runs shielding to find best safe action for t_k1
+        println("POMDP requested action = ", [next_pomdp_action.steering_angle, next_pomdp_action.delta_speed])
+        next_action = nothing
+        shielding_nbh = get_nearby_humans(current_sim_obj,pomdp_details.num_nearby_humans,pomdp_details.min_safe_distance_from_human,
+                                                pomdp_details.cone_half_angle)
+        if(length(info[:tree].children[1]) != 0)
+            Dt_obs_to_k1 = 0.0
+            next_action = get_best_shielded_action(predicted_vehicle_state, shielding_nbh.position_data, Dt_obs_to_k1, exp_details.one_time_step,
+                shield_get_actions, veh_body, exp_details.human_goal_locations, planner.pomdp, info[:tree], exp_details.user_defined_rng)
+        else
+            # ISSUE: need to deal with default action empty tree problem
+            next_action = next_pomdp_action
+        end
 
         current_vehicle_speed = clamp(current_vehicle_speed+next_action.delta_speed, 0.0, pomdp_details.max_vehicle_speed)
         # current_vehicle_steering_angle = get_steering_angle(current_sim_obj.vehicle_params.L, next_action.delta_heading_angle, current_vehicle_speed, exp_details.one_time_step)
