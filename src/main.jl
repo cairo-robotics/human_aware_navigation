@@ -1,5 +1,5 @@
 using Pkg
-user = "Himanshu"
+user = "Will"
 if user == "Himanshu"
     Pkg.activate("/home/himanshu/Documents/Research/BellmanPDEs.jl/")
 elseif user == "Will"

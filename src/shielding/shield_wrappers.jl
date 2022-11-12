@@ -13,7 +13,7 @@ function get_best_shielded_action(veh, nearby_humans, Dt_obs_to_k1, Dt_plan, get
 
     # run shielding algorithm to produce shielded action set
     v_human_max = 1.25
-    safe_HJB_value_lim = 500.0
+    safe_HJB_value_lim = 200.0
     shield_actions, shield_action_indices = shield_action_set(x_k1, nbh_pos, Dt_obs_to_k1, Dt_plan, get_actions, veh_body, human_goal_positions, v_human_max, safe_HJB_value_lim, pomdp)
     println("len(ia_safe_set) = ", length(shield_action_indices))
 

@@ -39,6 +39,14 @@ function wrap_between_negative_pi_to_pi(theta)
     end
 end
 
+function wrap_between_0_to_2pi(theta)
+    if(theta<0.0)
+        return theta+2*pi
+    else
+        return theta
+    end
+end
+
 function find_HJB_path(vehicle, vehicle_params, rollout_guide, exp_details)
 
     current_state = SVector(vehicle.x,vehicle.y,wrap_between_negative_pi_to_pi(vehicle.theta),vehicle.v)

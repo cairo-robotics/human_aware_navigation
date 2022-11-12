@@ -642,6 +642,39 @@ function calculate_upper_bound(m::ExtendedSpacePOMDP{HJBPolicy}, b)
     return clamp(value_sum,-100.0,Inf)
 end
 
+function calculate_upper_bound_x(m::ExtendedSpacePOMDP{HJBPolicy}, x_stop)
+    value_sum = 0.0
+
+    # println("UBx: x_stop = ", x_stop)
+
+    x = SVector(x_stop[1], x_stop[2], wrap_between_0_to_2pi(x_stop[3]), 0.0)
+
+    # println("UBx: x = ", x)
+
+    a, q_vals = HJB_policy(SVector(x[1],x[2],wrap_between_negative_pi_to_pi(x[3]),x[4]), 0.5, 750.0, m.rollout_guide.get_actions,
+                m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,m.rollout_guide.value_array,m.rollout_guide.veh,
+                m.rollout_guide.state_grid)
+
+    i = 0
+    while(x[1] != -100.0 && i < 100)
+        # generate r and x' for current x-a
+        new_x, r = upper_bound_rollout_gen(m, x, a)
+        value_sum += r
+
+        # pass x to next time step, get next action from policy
+        x = new_x
+        a, q_vals = HJB_policy(SVector(x[1],x[2],wrap_between_negative_pi_to_pi(x[3]),x[4]), 0.5, 750.0, m.rollout_guide.get_actions,
+                    m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,m.rollout_guide.value_array,m.rollout_guide.veh,
+                    m.rollout_guide.state_grid)
+
+        # println("UBx: x = ", x)
+
+        i+=1
+    end
+    
+    return clamp(value_sum, -100.0, Inf)
+end
+
 #=
 ************************************************************************************************
 Lower bound policy function for DESPOT

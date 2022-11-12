@@ -20,7 +20,7 @@ function in_safe_area(px,py,vehicle_x,vehicle_y,world)
             return false
         end
     end
-    if(is_within_range(px,py,vehicle_x,vehicle_y,1.0))
+    if(is_within_range(px,py,vehicle_x,vehicle_y,2.0))
         return false
     end
     return true

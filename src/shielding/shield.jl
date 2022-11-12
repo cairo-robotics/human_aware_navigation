@@ -30,19 +30,84 @@ function shield_action_set(x_k1, nearby_human_positions, Dt_obs_to_k1, Dt_plan, 
         # calculate time needed for divert path from new state
         kd_stop = ceil(Int, (0.0 - x_k2[4])/(-Dv_max)) - 1
 
+        # println("\nshield: ia_k1 = $ia_k1, a_k1 = $a_k1, x_k2 = $x_k2, kd_stop = $kd_stop")
+
         # iterate through divert steering angles
         for dpath in shuffle([1,2,3])
             dpath_safe = true
 
+            # println("shield: a_k1 = $a_k1, dpath = $dpath")
+
             x_kd = x_k2
             for kd in 0:kd_stop
-                # check if divert path is in static unsafe set
-                val_x_kd = interp_value(x_kd, m.rollout_guide.value_array, m.rollout_guide.state_grid)
-                if val_x_kd < safe_HJB_value_lim
-                    println("shield: x_kd = $x_kd has unsafe HJB value = $val_x_kd")
-                    dpath_safe = false
-                    break
+                # ISSUE: can get stuck in HJB chokepoints
+                #   - POMDP leads vehicle to right of rightmost obstacle, 
+                #       then shield says all divert states have val_x<500.0
+                #   - should probably lower threshold some more
+                #   - can do value check only on last state in divert path
+
+                #   - could just generate human-free HJB path to goal to check state validity
+                #       - would probably need to use POMDP state propagator, collision checker
+                #       - should basically be how upper bound rollouts are conducted
+                #           - does calculate_upper_bound() function conduct full rollout sim?
+                #               - yes, but set up to take m and b as inputs
+
+                #   - can use calculate_upper_bound(m, b) to assess whether goal can be reached from divert stop point
+                #       - have m unchanged, need to create b for x_stop state
+                #           - b::TreeSearchScenarioParameters() - used on line 196 in simulator.jl
+                #           - needs vehicle_state, vehicle_params, exp_details, 
+
+                #   - might be easier to make copy of upper_bound() function that takes state as input (since don't need other stuff in b)
+                #   - b uses in upper_bound():
+                #       - if(b.depth == 100) - line 612
+                #       - if b.depth+i < 100 - line 622
+                #       - s = first(particles(b)) - line 615
+
+                #   - is s even needed, or can just pass x directly?
+                #       - nope, can pass x directly
+
+                #   - UBx seems to work well (for actions it actually calls)
+
+                # # check if divert stop point is in static unsafe set (OLD)
+                # if kd == kd_stop
+                #     val_x_kd = interp_value(x_kd, m.rollout_guide.value_array, m.rollout_guide.state_grid)
+                    
+                #     if val_x_kd < safe_HJB_value_lim
+                #         println("shield: ia_k1 = $ia_k1, dpath = $dpath, kd = $kd, x_kd = $x_kd has unsafe HJB value = $val_x_kd")
+                #         dpath_safe = false
+                #         break
+                #     end
+                # end
+
+                # (?): did a_k1 = (0.0, -delta_speed) get skipped when v_k1=0.5 m/s?
+                #   - did it get removed somewhere?
+                #   - last two divert actions also seem to be skipped (make sure not just this context)
+                #   - check get_actions() stuff
+                #   - these are the actions with -Dv, is it an issue with kd_stop?
+                #       - yep, kd_stop = -1 when v_k1=0.5 m/s and Dv_k1=-0.5 m/s (hmm...)
+
+                #   - kd_stop=-1 kinda makes sense
+                #   - when choosing action a_k1, need to check if landing spot x_k2 is safe -> check kd=0
+                #   - if vehicle is already stopped at t_k1, don't need to check x_k2 (since x_k2 = x_k1)
+                #       -  x_k1 has already been proven statically safe, since you're in it
+
+                #   - think everything is working
+                #       - test theta conversions by setting initial angle to something in fourth quadrant -> works
+                #       - test UBx collision checking when x_stop in static unsafe set -> works
+
+                # check if divert stop point is in static unsafe set (NEW)
+                if kd == kd_stop
+                    val_x_stop = calculate_upper_bound_x(m, x_kd)
+                    # println("shield: val_x_stop = ", val_x_stop)
+
+                    if val_x_stop < 0.0
+                        println("shield: ia_k1 = $ia_k1, dpath = $dpath, kd = $kd, x_kd = $x_kd has unsafe UB value = $val_x_stop")
+                        dpath_safe = false
+                        break
+                    end
                 end
+
+                # (?): should this be checking for direct collisions with static obstacles as well?
 
                 # check for collisions with each human
                 veh_body_cir_kd = state_to_body_circle(x_kd, veh)
@@ -81,7 +146,10 @@ function shield_action_set(x_k1, nearby_human_positions, Dt_obs_to_k1, Dt_plan, 
 
         # action is safe
         if ia_k1_safe == true
+            # println("shield: ia_k1 = $ia_k1 is safe")
             push!(ia_k1_safe_set, ia_k1)
+        else
+            # println("shield: ia_k1 = $ia_k1 is not safe")
         end
     end
 

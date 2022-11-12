@@ -1,14 +1,14 @@
 small_obstacles_20x20 =  InputParameters(
-    MersenneTwister(), #=rng::AbstractRNG=#
+    MersenneTwister(11), #=rng::AbstractRNG=#
     20.0, #=env_length::Float64=#
     20.0, #=env_breadth::Float64=#
     ObstacleLocation[ObstacleLocation(5.125,4.875,1.125), ObstacleLocation(6.5,15.25,1.5),
                         ObstacleLocation(16.25,11.0,1.125), ObstacleLocation(10.0,9.5,2.25) ], #=obstacles::Array{obstacle_location,1}=#
     20, #=num_humans::Int64=#
     1.0, #=human_start_v::Float64=#
-    2.5, #=veh_start_x::Float64=#
+    10.0, #=veh_start_x::Float64=#
     2.0, #=veh_start_y::Float64=#
-    0.0, #=veh_start_theta::Float64=#
+    1/2*pi, #=veh_start_theta::Float64=#
     0.0, #=veh_start_v::Float64=#
     13.5, #=veh_goal_x::Float64=#
     19.0, #=veh_goal_y::Float64=#
