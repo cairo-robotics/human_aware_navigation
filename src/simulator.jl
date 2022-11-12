@@ -141,6 +141,9 @@ function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, o
     output.sim_objects[current_time_value] = current_sim_obj
     nbh = NearbyHumans(HumanState[], Int64[], HumanGoalsBelief[])
     output.nearby_humans[current_time_value] = nbh
+    next_action = nothing
+    info = nothing
+    predicted_vehicle_pos_in_goal = false
     debug = false
     start_time = time()
     # try
@@ -184,13 +187,12 @@ function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, o
             output.nearby_humans[current_time_value] = nbh
             output.b_root[current_time_value] = nothing
             output.despot_trees[current_time_value] = nothing
+            predicted_vehicle_pos_in_goal = true
         else
             if(debug)
                 println("Starting POMDP planning")
                 start_time = time()
             end
-
-            # observes environment at t_k
             nbh = get_nearby_humans(current_sim_obj,pomdp_details.num_nearby_humans,pomdp_details.min_safe_distance_from_human,
                                                     pomdp_details.cone_half_angle)
             b = TreeSearchScenarioParameters(predicted_vehicle_state.x,predicted_vehicle_state.y,predicted_vehicle_state.theta,predicted_vehicle_state.v,
@@ -198,10 +200,8 @@ function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, o
                                 current_sim_obj.env.length,current_sim_obj.env.breadth,time_duration_until_pomdp_action_determined)
             output.nearby_humans[current_time_value] = nbh
             output.b_root[current_time_value] = b
-
             # runs DESPOT to calculate action for t_k1
             next_pomdp_action, info = action_info(planner, b)
-
             if(debug)
                 println("Finished POMDP planning. Action selected")
                 time_taken = time() - start_time
@@ -209,7 +209,6 @@ function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, o
             end
             output.despot_trees[current_time_value] = info
         end
-        # next_action = ActionExtendedSpacePOMDP(0.0,0.0)
         #=
         Simulate for (pomdp_planning_time + buffer_time) seconds
         =#
@@ -224,18 +223,17 @@ function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, o
         current_sim_obj = simulate_vehicle_and_humans!(current_sim_obj, current_vehicle_steering_angle, current_vehicle_speed,
                                                 current_time_value, time_duration_until_next_action_is_applied, exp_details, output)
 
-        # runs shielding to find best safe action for t_k1
+        # Run shielding to find the best safe action for next time step
         println("POMDP requested action = ", [next_pomdp_action.steering_angle, next_pomdp_action.delta_speed])
-        next_action = nothing
         shielding_nbh = get_nearby_humans(current_sim_obj,pomdp_details.num_nearby_humans,pomdp_details.min_safe_distance_from_human,
                                                 pomdp_details.cone_half_angle)
-        
-        if length(info[:tree].children[1]) != 0
+        if(predicted_vehicle_pos_in_goal)
+            next_action = next_pomdp_action
+        elseif(length(info[:tree].children[1]) != 0)
             Dt_obs_to_k1 = 0.0
             next_action = get_best_shielded_action(predicted_vehicle_state, shielding_nbh.position_data, Dt_obs_to_k1, exp_details.one_time_step,
-                shield_get_actions, veh_body, exp_details.human_goal_locations, planner.pomdp, info[:tree], exp_details.user_defined_rng)
+                            shield_get_actions, veh_body, exp_details.human_goal_locations, planner.pomdp, info[:tree], exp_details.user_defined_rng)
         else
-            # ISSUE: need to deal with default action empty tree problem
             next_action = next_pomdp_action
         end
         # ---
