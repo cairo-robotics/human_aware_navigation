@@ -248,3 +248,57 @@ function observe(output,path_planning_details,exp_details,time_value, x_subpath)
     # annotate!(env.length/2, env.breadth/2, text("HG", :purple, :right, 20))
     display(p) 
 end
+
+function print_will_outputs(input_config, output)
+    println("\nINPUT ---")
+
+    # number of humans
+    println("num humans = ", input_config.num_humans_env)
+
+    # number of despot scenarios
+    println("num scenarios = ", input_config.num_scenarios)
+
+
+    println("\nOUTPUT ---")
+
+    # trial time taken
+    println("time taken = ", output.time_taken, " sec")
+
+    # trial steps taken
+    println("steps taken = ", length(output.despot_trees), " steps")
+
+    # average number of tree nodes
+    tree_sizes = Int64[]
+    for (t_k, despot_dict_k) in output.despot_trees
+        despot_k = despot_dict_k[:tree]
+        push!(tree_sizes, length(despot_k.parent))
+    end
+    println("tree sizes = ", tree_sizes)
+
+    # number of shield intervention steps
+
+    # number of human collisions
+    println("num human collisions = ", output.number_risky_scenarios)
+end
+
+# NOTE: don't think tree size by itself is a good metric, since DESPOT cuts off exploration when value estimates converge
+#   - want to compare nodes/sec, need to know how long DESPOT actually ran for in window
+#       - think this time might be logged somewhere in simulator.jl
+
+#= 
+mutable struct Output
+    number_sudden_stops::Int64
+    number_risky_scenarios::Int64
+    time_taken::Float64
+    vehicle_ran_into_boundary_wall::Bool
+    vehicle_ran_into_obstacle::Bool
+    vehicle_reached_goal::Bool
+    pomdp_planners::OrderedDict
+    nearby_humans::OrderedDict
+    b_root::OrderedDict
+    despot_trees::OrderedDict
+    vehicle_actions::OrderedDict
+    sim_objects::OrderedDict
+    risky_scenarios::OrderedDict
+end
+=#

@@ -6,9 +6,9 @@ small_obstacles_20x20 =  InputParameters(
                         ObstacleLocation(16.25,11.0,1.125), ObstacleLocation(10.0,9.5,2.25) ], #=obstacles::Array{obstacle_location,1}=#
     20, #=num_humans::Int64=#
     1.0, #=human_start_v::Float64=#
-    10.0, #=veh_start_x::Float64=#
-    2.0, #=veh_start_y::Float64=#
-    1/2*pi, #=veh_start_theta::Float64=#
+    2.0, #=veh_start_x::Float64=#
+    1.5, #=veh_start_y::Float64=#
+    0.0, #=veh_start_theta::Float64=#
     0.0, #=veh_start_v::Float64=#
     13.5, #=veh_goal_x::Float64=#
     19.0, #=veh_goal_y::Float64=#

@@ -237,7 +237,7 @@ function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, o
                                                     current_time_value, time_duration_until_next_action_is_applied, exp_details, output)
 
         # SHIELDING ---
-        run_shield = true
+        run_shield = false
 
         if run_shield == true
             println("POMDP requested action = ", [next_pomdp_action.steering_angle, next_pomdp_action.delta_speed])
@@ -259,7 +259,7 @@ function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, o
 
             # else, runs shield and returns best safe action
             else
-                next_action = get_best_shielded_action(predicted_vehicle_state, shielding_nbh.position_data, Dt_obs_to_k1, exp_details.one_time_step,
+                next_action, shield_intervened = get_best_shielded_action(predicted_vehicle_state, shielding_nbh.position_data, Dt_obs_to_k1, exp_details.one_time_step,
                     shield_get_actions, veh_body, exp_details.human_goal_locations, planner.pomdp, info[:tree], exp_details.user_defined_rng)
             end
         else

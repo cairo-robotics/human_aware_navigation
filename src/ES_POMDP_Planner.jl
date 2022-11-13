@@ -1045,18 +1045,19 @@ function get_actions(m::ExtendedSpacePOMDP{HJBPolicy},b)
     delta_speed = m.vehicle_action_delta_speed
     pomdp_state = first(particles(b))
     if(pomdp_state.vehicle_v == 0.0)
-        steering_angle = clamp(get_steering_angle(m.vehicle_wheelbase,max_delta_angle,delta_speed,m.one_time_step),0.0,max_steering_angle)
-        return [ActionExtendedSpacePOMDP(-steering_angle,delta_speed),
-                ActionExtendedSpacePOMDP(-2*steering_angle/3,delta_speed),
-                ActionExtendedSpacePOMDP(-steering_angle/3,delta_speed),
+        steering_angle_p = clamp(get_steering_angle(m.vehicle_wheelbase,max_delta_angle,(pomdp_state.vehicle_v+delta_speed),m.one_time_step),0.0,max_steering_angle)
+        return [ActionExtendedSpacePOMDP(-steering_angle_p,delta_speed),
+                ActionExtendedSpacePOMDP(-2*steering_angle_p/3,delta_speed),
+                ActionExtendedSpacePOMDP(-steering_angle_p/3,delta_speed),
                 ActionExtendedSpacePOMDP(0.0,delta_speed),
                 ActionExtendedSpacePOMDP(0.0,0.0),
-                ActionExtendedSpacePOMDP(steering_angle/3,delta_speed),
-                ActionExtendedSpacePOMDP(2*steering_angle/3,delta_speed),
-                ActionExtendedSpacePOMDP(steering_angle,delta_speed)
+                ActionExtendedSpacePOMDP(steering_angle_p/3,delta_speed),
+                ActionExtendedSpacePOMDP(2*steering_angle_p/3,delta_speed),
+                ActionExtendedSpacePOMDP(steering_angle_p,delta_speed)
                 ]
     elseif(pomdp_state.vehicle_v == m.max_vehicle_speed)
-        steering_angle = clamp(get_steering_angle(m.vehicle_wheelbase,max_delta_angle,pomdp_state.vehicle_v,m.one_time_step),0.0,max_steering_angle)
+        steering_angle = clamp(get_steering_angle(m.vehicle_wheelbase,max_delta_angle,(pomdp_state.vehicle_v),m.one_time_step),0.0,max_steering_angle)
+        steering_angle_n = clamp(get_steering_angle(m.vehicle_wheelbase,max_delta_angle,(pomdp_state.vehicle_v-delta_speed),m.one_time_step),0.0,max_steering_angle)
         rollout_action, q_vals = reactive_policy(SVector(pomdp_state.vehicle_x,pomdp_state.vehicle_y,wrap_between_negative_pi_to_pi(pomdp_state.vehicle_theta),pomdp_state.vehicle_v),
                                 delta_speed,750.0,m.rollout_guide.get_actions, m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,
                                 m.rollout_guide.value_array,m.rollout_guide.veh,m.rollout_guide.state_grid)
@@ -1070,12 +1071,13 @@ function get_actions(m::ExtendedSpacePOMDP{HJBPolicy},b)
                 ActionExtendedSpacePOMDP(2*steering_angle/3,0.0),
                 ActionExtendedSpacePOMDP(steering_angle,0.0),
                 ActionExtendedSpacePOMDP(rollout_action[1],rollout_action[2]),
-                ActionExtendedSpacePOMDP(steering_angle,-delta_speed),
-                ActionExtendedSpacePOMDP(-steering_angle,-delta_speed)
+                ActionExtendedSpacePOMDP(steering_angle_n,-delta_speed),
+                ActionExtendedSpacePOMDP(-steering_angle_n,-delta_speed)
                 # ActionExtendedSpacePOMDP(-10.0,-10.0)
                 ]
     else
         steering_angle = clamp(get_steering_angle(m.vehicle_wheelbase,max_delta_angle,pomdp_state.vehicle_v,m.one_time_step),0.0,max_steering_angle)
+        steering_angle_n = clamp(get_steering_angle(m.vehicle_wheelbase,max_delta_angle,(pomdp_state.vehicle_v-delta_speed),m.one_time_step),0.0,max_steering_angle)
         rollout_action, q_vals = reactive_policy(SVector(pomdp_state.vehicle_x,pomdp_state.vehicle_y,wrap_between_negative_pi_to_pi(pomdp_state.vehicle_theta),pomdp_state.vehicle_v),
                                 delta_speed,750.0,m.rollout_guide.get_actions, m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,
                                 m.rollout_guide.value_array,m.rollout_guide.veh,m.rollout_guide.state_grid)
@@ -1089,8 +1091,8 @@ function get_actions(m::ExtendedSpacePOMDP{HJBPolicy},b)
                 ActionExtendedSpacePOMDP(2*steering_angle/3,0.0),
                 ActionExtendedSpacePOMDP(steering_angle,0.0),
                 ActionExtendedSpacePOMDP(rollout_action[1],rollout_action[2]),
-                ActionExtendedSpacePOMDP(steering_angle,-delta_speed),
-                ActionExtendedSpacePOMDP(-steering_angle,-delta_speed)
+                ActionExtendedSpacePOMDP(steering_angle_n,-delta_speed),
+                ActionExtendedSpacePOMDP(-steering_angle_n,-delta_speed)
                 # ActionExtendedSpacePOMDP(-10.0,-10.0)
                 ]
     end

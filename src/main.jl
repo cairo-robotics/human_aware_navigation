@@ -113,6 +113,7 @@ run_experiment!(initial_sim_obj, pomdp_planner, exp_details, pomdp_details, outp
 #=
 Print useful values from the experiment
 =#
+print_will_outputs(input_config, output)
 
 #=
 Create Gif
@@ -126,10 +127,12 @@ if(create_gif)
         # observe(output, path_planning_details, exp_details, k);
         observe(output, exp_details, exp_details, k, x_subpath);
     end
-    gif(anim, "es_planner.gif", fps = 10)
+    # gif(anim, "es_planner.gif", fps = 10)
 end
 
 
 # nbh = NearbyHumans(HumanState[], Int64[], HumanGoalsBelief[])
 # vsd = VehicleSensor(HumanState[], Int64[], HumanGoalsBelief[])
 # get_plot(env, veh, veh_params, nbh, vsd, 0.0, exp_details)
+
+

@@ -15,21 +15,15 @@ function get_best_shielded_action(veh, nearby_humans, Dt_obs_to_k1, Dt_plan, get
     v_human_max = 1.25
     safe_HJB_value_lim = 200.0
     shield_actions, shield_action_indices = shield_action_set(x_k1, nbh_pos, Dt_obs_to_k1, Dt_plan, get_actions, veh_body, human_goal_positions, v_human_max, safe_HJB_value_lim, pomdp)
-    println("len(ia_safe_set) = ", length(shield_action_indices))
-
+   
     # TEST ONLY ---
     if length(shield_action_indices) == 0
-        println("ISSUE: no safe actions returned")
+        println("\n--- --- --- ISSUE: shield found no safe actions --- --- ---\n")
         println("x_k1 = ", x_k1)
+
+        return ActionExtendedSpacePOMDP(0.0, 0.0), true
     end
     # ---
-
-    # ISSUE: think had step where no safe actions were returned
-    #   - x_k = [18.652, 15.116, 0.778, 1.0]
-    #   - a_k = [0.475, 0.5]
-    #   - x_k1 = [19.2, 15.5, 1.3, 1.5] (approx)
-    #   - probably due to current inaccuracies with time step, MinkSum, substeps, etc.
-    #       -  if shield is designed perfectly (lol), this issue should theoretically never happen
 
     # find action with best POMDP Q-value in shielded action set 
     best_q_value = -Inf
@@ -49,9 +43,31 @@ function get_best_shielded_action(veh, nearby_humans, Dt_obs_to_k1, Dt_plan, get
     # draw random if multiple actions have same value
     best_action = rand(user_defined_rng, best_action)
 
-    println("best safe action = ", best_action)
+    # TEST ONLY ---
+    # compare pomdp_action with best_safe_action to see if shield intervened
+    _, ia_set, _ = shield_get_actions(x_k1, Dt_plan, veh, pomdp)
 
-    return ActionExtendedSpacePOMDP(best_action[1], best_action[2])
+    best_pomdp_q_value = -Inf
+
+    for i in axes(ia_set, 1)
+        l = get_q_value(despot, ia_set[i])
+
+        if l > best_pomdp_q_value
+            best_pomdp_q_value = l
+        end
+    end
+
+    shield_intervened = false
+    if best_pomdp_q_value - best_q_value > 0.01
+        shield_intervened = true
+
+        println("shield intervened")
+        println("best safe action = ", best_action)
+        println("len(ia_safe_set) = ", length(shield_action_indices))
+    end
+    # ---
+
+    return ActionExtendedSpacePOMDP(best_action[1], best_action[2]), shield_intervened
 end
 
 # same as ba_l in pomdps_glue.jl in ARDESPOT
