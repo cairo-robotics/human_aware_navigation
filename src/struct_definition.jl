@@ -216,3 +216,10 @@ mutable struct Output
     sim_objects::OrderedDict
     risky_scenarios::OrderedDict
 end
+
+mutable struct Output2
+    solver_runtimes::Vector{Float64}
+    shield_enabled::Bool
+    number_shield_interventions::Int64
+    shield_hist::Vector{Bool}
+end

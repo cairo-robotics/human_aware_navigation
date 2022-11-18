@@ -131,7 +131,7 @@ function simulate_vehicle_and_humans!(sim::Simulator, vehicle_steering_angle::Fl
     return current_sim_obj
 end
 
-function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, output)
+function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, output, output2)
     # initialize variables
     current_time_value = 0.0
     current_vehicle_speed = 0.0
@@ -215,7 +215,13 @@ function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, o
             output.b_root[current_time_value] = b
 
             # run DESPOT to calculate action for t_k1
+            solver_t0 = time()
+
             next_pomdp_action, info = action_info(planner, b)
+
+            solver_runtime = time() - solver_t0
+            println("solver_runtime = $solver_runtime sec")
+            push!(output2.solver_runtimes, solver_runtime)
 
             if(debug)
                 println("Finished POMDP planning. Action selected")
@@ -238,6 +244,7 @@ function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, o
 
         # SHIELDING ---
         run_shield = false
+        output2.shield_enabled = run_shield
 
         if run_shield == true
             println("POMDP requested action = ", [next_pomdp_action.steering_angle, next_pomdp_action.delta_speed])
@@ -252,18 +259,28 @@ function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, o
             # checks if vehicle is in the goal
             if predicted_vehicle_pos_in_goal == true
                 next_action = next_pomdp_action
+                push!(output2.shield_hist, false)
 
             # checks if tree is empty (root node took default action)
             elseif length(info[:tree].children[1]) == 0
                 next_action = next_pomdp_action
+                push!(output2.shield_hist, false)
 
             # else, runs shield and returns best safe action
             else
                 next_action, shield_intervened = get_best_shielded_action(predicted_vehicle_state, shielding_nbh.position_data, Dt_obs_to_k1, exp_details.one_time_step,
                     shield_get_actions, veh_body, exp_details.human_goal_locations, planner.pomdp, info[:tree], exp_details.user_defined_rng)
+                
+                if shield_intervened == true
+                    output2.number_shield_interventions += 1
+                    push!(output2.shield_hist, true)
+                else
+                    push!(output2.shield_hist, false)
+                end
             end
         else
             next_action = next_pomdp_action
+            push!(output2.shield_hist, false)
         end
         # ---
 

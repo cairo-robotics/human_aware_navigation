@@ -23,10 +23,10 @@ small_obstacles_20x20 =  InputParameters(
     6, #=num_nearby_humans::Int64=#
     3/3*pi, #=cone_half_angle::Float64=#
     1.0, #=pomdp_discount_factor::Float64=#
-    0.5, #=min_safe_distance_from_human::Float64=#
+    0.4, #=min_safe_distance_from_human::Float64=#
     0.0, #=min_safe_distance_from_obstacle::Float64=#
     1.0, #=radius_around_vehicle_goal::Float64=#
-    0.5, #=max_risk_distance::Float64=#
+    0.4, #=max_risk_distance::Float64=#
     -100.0, #=human_collision_penalty::Float64=#
     -100.0, #=obstacle_collision_penalty::Float64=#
     1000.0, #=goal_reached_reward::Float64=#
@@ -36,12 +36,12 @@ small_obstacles_20x20 =  InputParameters(
     100, #=num_scenarios::Int64=#
     4.0, #=d_near::Float64 = 0.5=#
     6.0, #=d_far::Float64 = 0.5=#
-    0.3, #=pomdp_planning_time::Float64=#
+    0.45, #=pomdp_planning_time::Float64=#
     pi/4, #=pomdp_action_max_delta_heading_angle::Float64=#
     0.5, #=pomdp_action_delta_speed::Float64=#
     0.5, #=one_time_step::Float64=#
     0.1, #=simulator_time_step::Float64=#
     0.1, #=update_sensor_data_time_interval::Float64=#
-    0.2, #=buffer_time::Float64=#
+    0.05, #=buffer_time::Float64=#
     50.0 #=MAX_TIME_LIMIT::Float64=#
 )

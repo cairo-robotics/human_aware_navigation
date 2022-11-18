@@ -42,6 +42,7 @@ pomdp_details = POMPDPlanningDetails(input_config)
 exp_details = ExperimentDetails(input_config)
 # path_planning_details =
 output = OutputObj()
+output2 = OutputObj2()
 
 #=
 Define environment
@@ -101,38 +102,32 @@ Define POMDP, POMDP Solver and POMDP Planner
 extended_space_pomdp = ExtendedSpacePOMDP(pomdp_details,env,veh_params,rollout_guide)
 pomdp_solver = DESPOTSolver(bounds=IndependentBounds(DefaultPolicyLB(FunctionPolicy(b->calculate_lower_bound(extended_space_pomdp, b)),max_depth=pomdp_details.tree_search_max_depth),
                     calculate_upper_bound,check_terminal=true,consistency_fix_thresh=1e-5),K=pomdp_details.num_scenarios,D=pomdp_details.tree_search_max_depth,
-                    T_max=pomdp_details.planning_time*6,tree_in_info=true,default_action=default_es_pomdp_action)
+                    T_max=pomdp_details.planning_time,tree_in_info=true,default_action=default_es_pomdp_action)
 # default_action=ActionExtendedSpacePOMDP(0.0,0.0)
 pomdp_planner = POMDPs.solve(pomdp_solver, extended_space_pomdp);
 
 #=
 Run the experiment
 =#
-run_experiment!(initial_sim_obj, pomdp_planner, exp_details, pomdp_details, output)
+run_experiment!(initial_sim_obj, pomdp_planner, exp_details, pomdp_details, output, output2)
 
 #=
 Print useful values from the experiment
 =#
-print_will_outputs(input_config, output)
+pushfirst!(output2.shield_hist, false)
+print_will_outputs(input_config, output, output2)
+plot_shield = true
 
 #=
 Create Gif
 =#
-create_gif = true
+create_gif = false
 # create_gif = false
 if(create_gif)
-    x_path = []
     x_subpath = []
-    anim = @animate for k ∈ keys(output.sim_objects)
-        # observe(output, path_planning_details, exp_details, k);
-        observe(output, exp_details, exp_details, k, x_subpath);
+    shield_subpath = []
+    anim = @animate for time_value ∈ keys(output.sim_objects)
+        observe(output, output2, exp_details, exp_details, time_value, x_subpath, shield_subpath, plot_shield);
     end
-    # gif(anim, "es_planner.gif", fps = 10)
+    gif(anim, "es_planner.gif", fps=10)
 end
-
-
-# nbh = NearbyHumans(HumanState[], Int64[], HumanGoalsBelief[])
-# vsd = VehicleSensor(HumanState[], Int64[], HumanGoalsBelief[])
-# get_plot(env, veh, veh_params, nbh, vsd, 0.0, exp_details)
-
-

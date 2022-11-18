@@ -63,3 +63,12 @@ function OutputObj()
         OrderedDict(), #=risky_scenarios::OrderedDict=#
     )
 end
+
+function OutputObj2()
+    return Output2(
+        Float64[], #=solver_runtimes::Vector{Float64}=#
+        false, #=shield_enabled::Bool=#
+        0, #=number_shield_interventions=#
+        Bool[], #=shield_hist=#
+    )
+end

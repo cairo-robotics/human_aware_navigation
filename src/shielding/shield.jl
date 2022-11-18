@@ -20,6 +20,7 @@ function shield_action_set(x_k1, nearby_human_positions, Dt_obs_to_k1, Dt_plan, 
     # perform reachability check on all actions in standard POMDP action set
     ia_k1_safe_set = []
 
+    disjoint_checks = 0
     for ia_k1 in ia_k1_set
         ia_k1_safe = false
 
@@ -53,6 +54,7 @@ function shield_action_set(x_k1, nearby_human_positions, Dt_obs_to_k1, Dt_plan, 
                 end
 
                 # (?): should this be checking for direct collisions with static obstacles as well?
+                #   - probably, but paths are  short enough that final state check should cover it
 
                 # check for collisions with each human
                 veh_body_cir_kd = state_to_body_circle(x_kd, veh)
@@ -60,6 +62,8 @@ function shield_action_set(x_k1, nearby_human_positions, Dt_obs_to_k1, Dt_plan, 
                 humans_safe = true
                 for ih in axes(nearby_human_positions, 1)
                     F_ih_body_kd = F_all_body_seq[ih][3+kd]
+
+                    disjoint_checks += 1
 
                     if isdisjoint(veh_body_cir_kd, F_ih_body_kd) == false
                         humans_safe = false
@@ -97,6 +101,7 @@ function shield_action_set(x_k1, nearby_human_positions, Dt_obs_to_k1, Dt_plan, 
             # println("shield: ia_k1 = $ia_k1 is not safe")
         end
     end
+    println("disjoint_checks = ", disjoint_checks)
 
     return actions_k1[ia_k1_safe_set], ia_k1_safe_set
 end
@@ -115,20 +120,28 @@ function generate_F_all_seq(nearby_human_positions, Dt_obs_to_k1, Dt_plan, v_hum
     return F_all_body_seq
 end
 
+# ISSUE: possible issue with set checking, vehicle was able to drive through a pedestrian
+#   - shield seems to be intervening less (or not at all?)
+#   - seems like it's not even running
+#   - intervened once, need to see what error is
+#   - used to intervene on like 1/4 of all steps, now hardly ever
+#   - only checking one set or something? make sure lengths are correct
+# F_ih_body_ks = F_ih_ks
+
 # generate an FRS sequence for a given human position and time horizon
 function generate_F_ih_seq(x_ih_obs, Dt_obs_to_k1, Dt_plan, v_human_max, goal_positions, kd_max)
     F_ih_seq = []
     F_ih_body_seq = []
 
-    h_body = VPolyCircle([0.0, 0.0], 0.5)
+    h_body = VPolyCircle([0.0, 0.0], 0.4)
 
     # create initial polygon from observed position
     x_ih_ks_points = [x_ih_obs]
+    
     F_ih_ks = VPolygon(x_ih_ks_points)
     push!(F_ih_seq, F_ih_ks)
 
-    F_ih_body_ks = F_ih_ks
-    # F_ih_body_ks = minkowski_sum(F_ih_ks, h_body)
+    F_ih_body_ks = LazySets.translate(h_body, x_ih_obs)
     push!(F_ih_body_seq, F_ih_body_ks)
 
     # propagate set through time steps

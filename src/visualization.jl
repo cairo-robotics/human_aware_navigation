@@ -101,7 +101,7 @@ display(p)
 =#
 
 
-function get_plot_will_version(env, vehicle, vehicle_params, nearby_humans, sensor_data, time_value, exp_details, x_subpath)
+function get_plot_will_version(env, vehicle, vehicle_params, nearby_humans, sensor_data, time_value, exp_details, x_subpath, shield_subpath, plot_shield)
     # NOTE: hard-coding vehicle body in for now, didn't want to modify observe() arguments
     wheelbase = 0.75
     body_dims = [1.0, 0.5]
@@ -160,6 +160,15 @@ function get_plot_will_version(env, vehicle, vehicle_params, nearby_humans, sens
             label=lbl, seriestype = [:shape,])
     end
 
+    # palette(:Blues_4)
+
+    # shield path
+    plot!(p_sim, getindex.(x_subpath, 1), getindex.(x_subpath, 2),
+        linez=shield_subpath, clim=(0,1), c=cgrad([:white, :blue]),
+        colorbar_title=false,
+        linewidth=6,
+        label="")
+
     # vehicle path
     linez_clim = 2.5
     linez_velocity = zeros(length(x_subpath))
@@ -168,10 +177,10 @@ function get_plot_will_version(env, vehicle, vehicle_params, nearby_humans, sens
     end
 
     plot!(p_sim, getindex.(x_subpath, 1), getindex.(x_subpath, 2),
-        linez=linez_velocity, clim=(0,linez_clim), colorbar_title="Velocity [m/s]",
+        linez=linez_velocity, clim=(0,linez_clim), colorbar_title=false,
         linewidth=2,
         label="")
-    
+
     # vehicle body
     x = [vehicle.x, vehicle.y, vehicle.theta, vehicle.v]
     scatter!(p_sim, [x[1]], [x[2]], 
@@ -226,7 +235,7 @@ end
 
 
 #Function to display the environment, vehicle and humans
-function observe(output,path_planning_details,exp_details,time_value, x_subpath)
+function observe(output, output2, path_planning_details, exp_details, time_value, x_subpath, shield_subpath, plot_shield)
     e = output.sim_objects[time_value].env
     v = output.sim_objects[time_value].vehicle
     vp = output.sim_objects[time_value].vehicle_params
@@ -238,7 +247,17 @@ function observe(output,path_planning_details,exp_details,time_value, x_subpath)
     x_k = [v.x, v.y, wrap_between_negative_pi_to_pi(v.theta), v.v]
     push!(x_subpath, x_k)
 
-    p = get_plot_will_version(e, v, vp, nbh, sd, time_value, exp_details, x_subpath)
+    k = floor(Int, time_value/0.5) + 1
+    # println(time_value, " -> ", k, " -> ", output2.shield_hist[k])
+    push!(shield_subpath, Int(output2.shield_hist[k]))
+
+    # if k <= length(output2.shield_hist)
+    #     push!(shield_subpath, Int(output2.shield_hist[k]))
+    # else
+    #     push!(shield_subpath, Int(false))
+    # end
+
+    p = get_plot_will_version(e, v, vp, nbh, sd, time_value, exp_details, x_subpath, shield_subpath, plot_shield)
     # p = get_plot(e,v,vp,h,hp,sd,nbh,time_value,exp_details)
 
     if(hasfield(typeof(vp),:controls_sequence))
@@ -249,7 +268,17 @@ function observe(output,path_planning_details,exp_details,time_value, x_subpath)
     display(p) 
 end
 
-function print_will_outputs(input_config, output)
+# TO-DO: show when shield is active in sim
+#   - want to add blue line around path for time steps that shield is intervening
+#   - should store vector of every time step with a bool for if shield was engaged
+#   - need to plot x_subpath again, but change color based on bool value (linez)
+#   - have time_value in 0.1 sec increments
+#       - need to correlate clock time to action step
+#       - should be able to do something like k=floor(time_value/0.5)
+#       - t=1.2 -> k=3
+
+
+function print_will_outputs(input_config, output, output2)
     println("\nINPUT ---")
 
     # number of humans
@@ -270,20 +299,55 @@ function print_will_outputs(input_config, output)
     # average number of tree nodes
     tree_sizes = Int64[]
     for (t_k, despot_dict_k) in output.despot_trees
-        despot_k = despot_dict_k[:tree]
+        if isnothing(despot_dict_k)
+            continue
+        end
+
+        despot_k = despot_dict_k[:tree]     # ISSUE: throws error when tree is empty
         push!(tree_sizes, length(despot_k.parent))
     end
     println("tree sizes = ", tree_sizes)
 
+    # solver runtimes
+    # println("solver runtimes = ", output2.solver_runtimes)
+
+    # nodes/sec
+    nodes_per_sec = tree_sizes./output2.solver_runtimes
+    nodes_per_sec_avg = mean(nodes_per_sec)
+    println("nodes_per_sec = ", round.(nodes_per_sec, digits=3))
+    println("nodes_per_sec_avg = ", nodes_per_sec_avg)
+
+    # exact reactive lower bound, 100 scenarios -> nps_avg = ~875 (4-5 trials)
+    # exact reactive lower bound, 50 scenarios -> nps_avg = ~1080, 1500, 718, 1928 (4-5 trials)
+
     # number of shield intervention steps
+    println("shield enabled = ", output2.shield_enabled)
+    println("number of shield interventions = ", output2.number_shield_interventions)
+    println("shield history = ", output2.shield_hist)
 
     # number of human collisions
-    println("num human collisions = ", output.number_risky_scenarios)
+    if output.number_risky_scenarios > 0
+        println("human collision = ", true)
+        println("num human collisions = ", output.number_risky_scenarios)
+    else
+        println("human collision = ", false)
+    end
 end
 
 # NOTE: don't think tree size by itself is a good metric, since DESPOT cuts off exploration when value estimates converge
 #   - want to compare nodes/sec, need to know how long DESPOT actually ran for in window
 #       - think this time might be logged somewhere in simulator.jl
+
+# solver runs for longer than T_max sometimes
+#   - probably doesn't affect numerical results, but not good for real-time use
+#   - actually think this is going to add a lot of variance to data, not sure how valuable this is
+
+# focus on more performance-based metrics like runtime, collision rate, etc.
+#   - computing stuff is too variable, hard to capture impact of one parameter
+
+# NOTE: need to count collisions with each unique human, not just individual collision states (since can count multiple for same collision)
+#   - need to look in gen function to see where individual humans are checked
+#   - actually, only care whether any human collisions occured or not
 
 #= 
 mutable struct Output
