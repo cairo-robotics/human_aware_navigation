@@ -85,7 +85,6 @@ Functions to respawn human in the environment
 
 function spawn_new_human(exp_details, vehicle, vehicle_params)
 
-    # println("************************Spawning new human************************")
     #=
     Choose which side to spawn human from
     Find x and y

@@ -145,18 +145,18 @@ function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, o
     info = nothing
     predicted_vehicle_pos_in_goal = false
     debug = false
+    run_shield = true
     start_time = time()
 
-    # run simulation
+    # Run simulation
     while(!stop_simulation!(current_sim_obj,current_time_value,exp_details,output))
-        # print current execution step
         state_array = [current_sim_obj.vehicle.x, current_sim_obj.vehicle.y, current_sim_obj.vehicle.theta, current_sim_obj.vehicle.v]
         action_array = [current_action.steering_angle, current_action.delta_speed]
         println("\nTime_k = ", current_time_value,
               "\t State_k = ", round.(state_array, digits=3),
               "\t Action_k = ", round.(action_array, digits=3))
 
-        # simulate for (one_time_step - pomdp_planning_time - buffer_time) seconds
+        # Simulate for (one_time_step - pomdp_planning_time - buffer_time) seconds
         if(debug)
             println("Simulating for one_time_step - pomdp_planning_time - buffer_time seconds : " , exp_details.one_time_step - (pomdp_details.planning_time + exp_details.buffer_time))
             start_time = time()
@@ -184,13 +184,7 @@ function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, o
                                             current_vehicle_steering_angle, current_vehicle_speed, time_duration_until_pomdp_action_determined)
         modified_vehicle_params = modify_vehicle_params(current_sim_obj.vehicle_params)
 
-        # ISSUE: not applying POMDP action to sim when shielding is turned off
-        #   - still calculates an action on line 219, it just isn't applied to the sim
-        #   - is gen function being run?
-        #       - think simulate_vehicle_and_humans!() is the function that propagates everything
-        #       - looks like it's called on line 166 each loop, so seems like vehicle should be propagating fine
-
-        # check if vehicle in goal
+        # Check if the predicted vehicle position is in the goal region
         if(is_within_range(predicted_vehicle_state.x,predicted_vehicle_state.y,modified_vehicle_params.goal.x,modified_vehicle_params.goal.y,exp_details.radius_around_vehicle_goal))
             println("Predicted vehicle state is in goal")
             next_pomdp_action = ActionExtendedSpacePOMDP(0.0,0.0)
@@ -198,14 +192,12 @@ function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, o
             output.b_root[current_time_value] = nothing
             output.despot_trees[current_time_value] = nothing
             predicted_vehicle_pos_in_goal = true
-        
-        # if not, take observation and calculate next action
+        # If it is not, then take observation from the environment and plan for the next action
         else
             if(debug)
                 println("Starting POMDP planning")
                 start_time = time()
             end
-
             nbh = get_nearby_humans(current_sim_obj,pomdp_details.num_nearby_humans,pomdp_details.min_safe_distance_from_human,
                                                     pomdp_details.cone_half_angle)
             b = TreeSearchScenarioParameters(predicted_vehicle_state.x,predicted_vehicle_state.y,predicted_vehicle_state.theta,predicted_vehicle_state.v,
@@ -214,7 +206,7 @@ function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, o
             output.nearby_humans[current_time_value] = nbh
             output.b_root[current_time_value] = b
 
-            # run DESPOT to calculate action for t_k1
+            # Run DESPOT to calculate next action
             next_pomdp_action, info = action_info(planner, b)
 
             if(debug)
@@ -226,37 +218,27 @@ function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, o
             output.despot_trees[current_time_value] = info
         end
 
-        # simulate for (pomdp_planning_time + buffer_time) seconds
         if(debug)
             println("Simulating for pomdp_planning_time + buffer_time seconds : " , pomdp_details.planning_time + exp_details.buffer_time)
             start_time = time()
         end
-
+        # Simulate for (pomdp_planning_time + buffer_time) seconds
         time_duration_until_next_action_is_applied = pomdp_details.planning_time + exp_details.buffer_time
         current_sim_obj = simulate_vehicle_and_humans!(current_sim_obj, current_vehicle_steering_angle, current_vehicle_speed,
                                                     current_time_value, time_duration_until_next_action_is_applied, exp_details, output)
 
-        # SHIELDING ---
-        run_shield = true
-
-        if run_shield == true
+        # Shielding
+        if(run_shield)
             println("POMDP requested action = ", [next_pomdp_action.steering_angle, next_pomdp_action.delta_speed])
-
-            # observes environment at t_k1
-            # current_sim_obj = simulate_vehicle_and_humans!(current_sim_obj, current_vehicle_steering_angle, current_vehicle_speed,
-            #                                         current_time_value, time_duration_until_next_action_is_applied, exp_details, output)
             shielding_nbh = get_nearby_humans(current_sim_obj,pomdp_details.num_nearby_humans,pomdp_details.min_safe_distance_from_human,
                                                     pomdp_details.cone_half_angle)
             Dt_obs_to_k1 = 0.0
-            
-            # checks if vehicle is in the goal
-            if predicted_vehicle_pos_in_goal == true
+            # Check if the predicted vehicle position is in the goal region
+            if(predicted_vehicle_pos_in_goal)
                 next_action = next_pomdp_action
-
             # checks if tree is empty (root node took default action)
             elseif length(info[:tree].children[1]) == 0
                 next_action = next_pomdp_action
-
             # else, runs shield and returns best safe action
             else
                 next_action = get_best_shielded_action(predicted_vehicle_state, shielding_nbh.position_data, Dt_obs_to_k1, exp_details.one_time_step,
@@ -265,9 +247,8 @@ function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, o
         else
             next_action = next_pomdp_action
         end
-        # ---
 
-        # pass items to next time step
+        # Set parameters for the next cycle
         current_vehicle_speed = clamp((current_vehicle_speed + next_action.delta_speed), 0.0, pomdp_details.max_vehicle_speed)
         current_vehicle_steering_angle = next_action.steering_angle
         current_action = next_action
@@ -279,7 +260,7 @@ function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, o
             println("Time Taken : ", time_taken)
         end
 
-        # store relevant values in exp_details
+        # Store relevant values in exp_details
         output.vehicle_actions[current_time_value] = current_action
         if(current_action.delta_speed == -10.0)
             output.number_sudden_stops += 1

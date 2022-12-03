@@ -1,5 +1,5 @@
 using Pkg
-user = "Will"
+user = "Himanshu"
 if user == "Himanshu"
     Pkg.activate("/home/himanshu/Documents/Research/BellmanPDEs.jl/")
 elseif user == "Will"
@@ -40,8 +40,8 @@ Define experiment details and POMDP planning details
 =#
 pomdp_details = POMPDPlanningDetails(input_config)
 exp_details = ExperimentDetails(input_config)
-# path_planning_details =
 output = OutputObj()
+# path_planning_details =
 
 #=
 Define environment
@@ -64,6 +64,7 @@ veh_params = VehicleParametersESPlanner(input_config.veh_wheelbase,input_config.
 body_dims = [veh_params.length, veh_params.breadth]
 origin_to_cent = [veh_params.dist_origin_to_center, 0.0]
 veh_body = define_vehicle(veh_params.wheelbase, body_dims, origin_to_cent, veh_params.max_steering_angle, veh_params.max_speed)
+
 #=
 Define Humans
 =#
@@ -83,8 +84,8 @@ max_solve_steps = 200
 Dval_tol = 0.1
 HJB_planning_details = HJBPlanningDetails(Dt, max_solve_steps, Dval_tol, veh_params.max_steering_angle, veh_params.max_speed)
 policy_path = "/home/himanshu/Documents/Research/human_aware_navigation/src"
-# solve_HJB = true
-solve_HJB = false
+solve_HJB = true
+# solve_HJB = false
 if(solve_HJB)
     println("Solving HJB equation for given environment ....")
     rollout_guide = HJBPolicy(HJB_planning_details, exp_details, veh_params)
@@ -102,7 +103,6 @@ extended_space_pomdp = ExtendedSpacePOMDP(pomdp_details,env,veh_params,rollout_g
 pomdp_solver = DESPOTSolver(bounds=IndependentBounds(DefaultPolicyLB(FunctionPolicy(b->calculate_lower_bound(extended_space_pomdp, b)),max_depth=pomdp_details.tree_search_max_depth),
                     calculate_upper_bound,check_terminal=true,consistency_fix_thresh=1e-5),K=pomdp_details.num_scenarios,D=pomdp_details.tree_search_max_depth,
                     T_max=pomdp_details.planning_time*6,tree_in_info=true,default_action=default_es_pomdp_action)
-# default_action=ActionExtendedSpacePOMDP(0.0,0.0)
 pomdp_planner = POMDPs.solve(pomdp_solver, extended_space_pomdp);
 
 #=
