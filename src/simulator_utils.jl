@@ -1,9 +1,12 @@
-Base.copy(obj::VehicleParametersESPlanner) = VehicleParametersESPlanner(obj.L,obj.max_speed,obj.goal)
-Base.copy(obj::VehicleParametersLSPlanner) = VehicleParametersLSPlanner(obj.L,obj.max_speed,obj.goal,obj.hybrid_astar_path)
+Base.copy(obj::VehicleParametersESPlanner) = VehicleParametersESPlanner(obj.wheelbase,obj.length,obj.breadth,obj.dist_origin_to_center,
+                                            obj.radius,obj.max_speed,obj.max_steering_angle,obj.goal)
+Base.copy(obj::VehicleParametersLSPlanner) = VehicleParametersLSPlanner(obj.wheelbase,obj.length,obj.breadth,obj.dist_origin_to_center,
+                                            obj.radius,obj.max_speed,obj.max_steering_angle,obj.goal,obj.controls_sequence)
 Base.copy(obj::Tuple{Array{HumanState,1},Array{Int64,1}}) = (copy(obj[1]),copy(obj[2]))
 Base.copy(obj::NearbyHumans) = NearbyHumans(copy(obj.position_data),copy(obj.ids),copy(obj.belief))
 Base.copy(obj::HumanState) = HumanState(obj.x,obj.y,obj.v,obj.goal)
 Base.copy(obj::HumanParameters) = HumanParameters(obj.id,obj.path,obj.path_index)
+Base.copy(obj::Simulator, new_vehicle_params) = Simulator(obj.env,obj.vehicle,new_vehicle_params,obj.vehicle_sensor_data,obj.humans,obj.humans_params,obj.one_time_step)
 
 #=
 ************************************************************************************************

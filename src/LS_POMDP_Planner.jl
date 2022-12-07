@@ -56,7 +56,7 @@ function LimitedSpacePOMDP(pomdp_details,exp_details,vehicle_params,rollout_guid
         pomdp_details.human_collision_penalty,
         pomdp_details.radius_around_vehicle_goal,
         pomdp_details.goal_reached_reward,
-        vehicle_params.L,
+        vehicle_params.wheelbase,
         pomdp_details.max_vehicle_speed,
         vehicle_params.goal,
         pomdp_details.one_time_step,
@@ -94,7 +94,7 @@ function Base.rand(rng::AbstractRNG, scenario_params::TreeSearchScenarioParamete
         push!(humans, new_human)
     end
     return StateLimitedSpacePOMDP(scenario_params.vehicle_x,scenario_params.vehicle_y,scenario_params.vehicle_theta,
-                scenario_params.vehicle_v,scenario_params.vehicle_params.index,humans)
+                scenario_params.vehicle_v,1,humans)
 end
 
 #=

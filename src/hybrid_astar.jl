@@ -175,8 +175,8 @@ function hybrid_astar_search(world, vehicle, vehicle_params, vehicle_actions, ne
         closed[node_key] = current_node
 
         for delta_heading_angle in vehicle_actions
-            steering_angle = get_steering_angle(vehicle_params.L,delta_heading_angle,planning_details.veh_path_planning_v,planning_details.one_time_step)
-            new_x,new_y,new_theta = get_new_vehicle_position(current_node.x,current_node.y,current_node.theta,vehicle_params.L,steering_angle,planning_details.veh_path_planning_v,planning_details.one_time_step)
+            steering_angle = get_steering_angle(vehicle_params.wheelbase,delta_heading_angle,planning_details.veh_path_planning_v,planning_details.one_time_step)
+            new_x,new_y,new_theta = get_new_vehicle_position(current_node.x,current_node.y,current_node.theta,vehicle_params.wheelbase,steering_angle,planning_details.veh_path_planning_v,planning_details.one_time_step)
             discrete_x,discrete_y,discrete_theta = get_discrete_state(new_x,new_y,new_theta,world,discretization_bin_width)
             # discrete_theta = current_node.discrete_theta + round(delta_heading_angle*180/pi)
             node_key = NodeBin(discrete_x,discrete_y,discrete_theta)
@@ -185,7 +185,7 @@ function hybrid_astar_search(world, vehicle, vehicle_params, vehicle_actions, ne
             end
             #Calculate actual cost of the new node
             g = current_node.actual_cost + (planning_details.lambda^(current_node.time_stamp+planning_details.one_time_step))* get_action_cost(world,nearby_humans,new_x,new_y,
-                                                vehicle_params.L,steering_angle,current_node.time_stamp+planning_details.one_time_step,planning_details)
+                                                vehicle_params.wheelbase,steering_angle,current_node.time_stamp+planning_details.one_time_step,planning_details)
             #Calculate heuristic cost of the new node
             h = calculate_heuristic_cost(new_x,new_y,new_theta,vehicle_params.goal.x,vehicle_params.goal.y,world)
             #Define new graph node

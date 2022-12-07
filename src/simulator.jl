@@ -40,10 +40,16 @@ function modify_vehicle_params(params::VehicleParametersESPlanner)
                 params.radius,params.max_speed,params.max_steering_angle,params.goal)
 end
 
-function modify_vehicle_params(params::VehicleParametersLSPlanner)
-    return VehicleParametersLSPlanner(params.L,params.max_speed,params.goal,params.hybrid_astar_path[2:end])
+function modify_vehicle_params(params::VehicleParametersLSPlanner, vehicle_speed, path_planning_v)
+    path_new_starting_index = Int64(vehicle_speed/path_planning_v) + 1
+    return VehicleParametersLSPlanner(params.wheelbase,params.length,params.breadth,params.dost_to_origin,params.radius,params.max_speed,
+                params.max_steering_angle,params.goal,params.controls_sequence[path_new_starting_index:end])
 end
 
+function modify_vehicle_params(params::VehicleParametersLSPlanner, new_controls_sequence)
+    return VehicleParametersLSPlanner(params.wheelbase,params.length,params.breadth,params.dost_to_origin,params.radius,params.max_speed,
+                params.max_steering_angle,params.goal,new_controls_sequence)
+end
 
 #=
 Function to check if it is time to stop the simulation
@@ -185,7 +191,7 @@ function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, o
         modified_vehicle_params = modify_vehicle_params(current_sim_obj.vehicle_params)
 
         # Check if the predicted vehicle position is in the goal region
-        if(is_within_range(predicted_vehicle_state.x,predicted_vehicle_state.y,modified_vehicle_params.goal.x,modified_vehicle_params.goal.y,exp_details.radius_around_vehicle_goal))
+        if(is_within_range(predicted_vehicle_state.x,predicted_vehicle_state.y,current_sim_obj.vehicle_params.goal.x,current_sim_obj.vehicle_params.goal.y,exp_details.radius_around_vehicle_goal))
             println("Predicted vehicle state is in goal")
             next_pomdp_action = ActionExtendedSpacePOMDP(0.0,0.0)
             output.nearby_humans[current_time_value] = nbh
