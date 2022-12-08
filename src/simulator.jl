@@ -103,7 +103,7 @@ function simulate_vehicle_and_humans!(sim::Simulator, vehicle_steering_angle::Fl
     number_steps_in_sim = Int64(time_duration/current_sim_obj.one_time_step)
 
     for i in 1:number_steps_in_sim
-        CURRENT_TIME_VALUE = current_time + (i*current_sim_obj.one_time_step)
+        CURRENT_TIME_VALUE = round(current_time + (i*current_sim_obj.one_time_step),digits=1)
         propogated_humans = Array{HumanState,1}(undef,exp_details.num_humans_env)
         for i in 1:exp_details.num_humans_env
             # propogated_humans[i] = propogate_human(current_sim_obj.humans[i], current_sim_obj.env, current_sim_obj.one_time_step, exp_details.user_defined_rng)
@@ -171,7 +171,7 @@ function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, o
         time_duration_until_planning_begins = exp_details.one_time_step - (pomdp_details.planning_time + exp_details.buffer_time)
         current_sim_obj = simulate_vehicle_and_humans!(current_sim_obj, current_vehicle_steering_angle, current_vehicle_speed,
                                                 current_time_value, time_duration_until_planning_begins, exp_details, output)
-        current_time_value += time_duration_until_planning_begins
+        current_time_value = round(current_time_value + time_duration_until_planning_begins,digits=1)
 
         if(debug)
             println("Finished simulation")
@@ -258,7 +258,7 @@ function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, o
         current_vehicle_speed = clamp((current_vehicle_speed + next_action.delta_speed), 0.0, pomdp_details.max_vehicle_speed)
         current_vehicle_steering_angle = next_action.steering_angle
         current_action = next_action
-        current_time_value += time_duration_until_next_action_is_applied
+        current_time_value = round(current_time_value + time_duration_until_next_action_is_applied,digits=1)
 
         if(debug)
             println("Finished simulation")
