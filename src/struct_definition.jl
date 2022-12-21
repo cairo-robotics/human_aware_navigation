@@ -109,10 +109,10 @@ mutable struct ExperimentDetails
 end
 
 mutable struct PathPlanningDetails
-    num_nearby_humans::Int64
     radius_around_uncertain_human::Float64
     min_safe_distance_from_human::Float64
     human_collision_cost::Float64
+    num_human_goals::Int64
     human_goals::Array{Location,1}
     veh_path_planning_v::Float64
     radius_around_vehicle_goal::Float64

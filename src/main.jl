@@ -16,16 +16,17 @@ include("utils.jl")
 include("ES_POMDP_Planner.jl")
 include("belief_tracker.jl")
 include("simulator.jl")
+include("simulator_utils.jl")
 include("parser.jl")
 include("visualization.jl")
 include("HJB_wrappers.jl")
 include("shielding/shield.jl")
 include("shielding/shield_wrappers.jl")
 
-# include("env_inputs/aspen_inputs.jl")
-# include("env_inputs/aspen_inputs2.jl")
+# include("configs/aspen_inputs.jl")
+# include("configs/aspen_inputs2.jl")
 include("env_inputs/small_obstacles_20x20.jl")
-# include("env_inputs/no_obstacles_big.jl")
+# include("configs/no_obstacles_big.jl")
 
 #=
 Initialization
@@ -51,12 +52,17 @@ exp_details.env = env
 exp_details.human_goal_locations = get_human_goals(env)
 
 #=
+Define Humans
+=#
+env_humans, env_humans_params = generate_humans(env,veh,exp_details.human_start_v,exp_details.human_goal_locations,exp_details.num_humans_env,
+                                        exp_details.simulator_time_step, exp_details.user_defined_rng)
+
+#=
 Define Vehicle
 =#
 veh = Vehicle(input_config.veh_start_x, input_config.veh_start_y, input_config.veh_start_theta, input_config.veh_start_v)
 veh_sensor_data = VehicleSensor(HumanState[],Int64[],HumanGoalsBelief[])
 veh_goal = Location(input_config.veh_goal_x,input_config.veh_goal_y)
-# veh_params = VehicleParametersESPlanner(input_config.veh_L,input_config.veh_max_speed,veh_goal)
 r = sqrt( (0.5*input_config.veh_length)^2 + (0.5*input_config.veh_breadth)^2 )
 veh_params = VehicleParametersESPlanner(input_config.veh_wheelbase,input_config.veh_length,
                 input_config.veh_breadth,input_config.veh_dist_origin_to_center, r,
@@ -64,12 +70,6 @@ veh_params = VehicleParametersESPlanner(input_config.veh_wheelbase,input_config.
 body_dims = [veh_params.length, veh_params.breadth]
 origin_to_cent = [veh_params.dist_origin_to_center, 0.0]
 veh_body = define_vehicle(veh_params.wheelbase, body_dims, origin_to_cent, veh_params.max_steering_angle, veh_params.max_speed)
-
-#=
-Define Humans
-=#
-env_humans, env_humans_params = generate_humans(env,veh,exp_details.human_start_v,exp_details.human_goal_locations,exp_details.num_humans_env,
-                                        exp_details.simulator_time_step, exp_details.user_defined_rng)
 
 #=
 Create sim object

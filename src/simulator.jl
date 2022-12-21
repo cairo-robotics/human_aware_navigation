@@ -1,7 +1,4 @@
-include("simulator_utils.jl")
-
-
-struct Simulator{P}
+struct NavigationSimulator{P}
     env::ExperimentEnvironment
     vehicle::Vehicle
     vehicle_params::P
@@ -42,12 +39,12 @@ end
 
 function modify_vehicle_params(params::VehicleParametersLSPlanner, vehicle_speed, path_planning_v)
     path_new_starting_index = Int64(vehicle_speed/path_planning_v) + 1
-    return VehicleParametersLSPlanner(params.wheelbase,params.length,params.breadth,params.dost_to_origin,params.radius,params.max_speed,
+    return VehicleParametersLSPlanner(params.wheelbase,params.length,params.breadth,params.dist_origin_to_center,params.radius,params.max_speed,
                 params.max_steering_angle,params.goal,params.controls_sequence[path_new_starting_index:end])
 end
 
 function modify_vehicle_params(params::VehicleParametersLSPlanner, new_controls_sequence)
-    return VehicleParametersLSPlanner(params.wheelbase,params.length,params.breadth,params.dost_to_origin,params.radius,params.max_speed,
+    return VehicleParametersLSPlanner(params.wheelbase,params.length,params.breadth,params.dist_origin_to_center,params.radius,params.max_speed,
                 params.max_steering_angle,params.goal,new_controls_sequence)
 end
 
@@ -96,7 +93,7 @@ Create new struct object for vehicle params.
 Create new struct object for the vehicle.
 Create new struct object for the humans.
 =#
-function simulate_vehicle_and_humans!(sim::Simulator, vehicle_steering_angle::Float64, vehicle_speed::Float64, current_time::Float64, time_duration::Float64,
+function simulate_vehicle_and_humans!(sim::NavigationSimulator, vehicle_steering_angle::Float64, vehicle_speed::Float64, current_time::Float64, time_duration::Float64,
                             exp_details::ExperimentDetails, output::Output)
 
     current_sim_obj = sim
@@ -121,7 +118,7 @@ function simulate_vehicle_and_humans!(sim::Simulator, vehicle_steering_angle::Fl
         new_sensor_data_obj = get_vehicle_sensor_data(new_veh_obj,new_humans,new_humans_params,current_sim_obj.vehicle_sensor_data,exp_details,CURRENT_TIME_VALUE)
 
         #Create a new simulator object
-        new_sim_object = Simulator(current_sim_obj.env, new_veh_obj, new_vehicle_parameters, new_sensor_data_obj, new_humans, new_humans_params, current_sim_obj.one_time_step)
+        new_sim_object = NavigationSimulator(current_sim_obj.env, new_veh_obj, new_vehicle_parameters, new_sensor_data_obj, new_humans, new_humans_params, current_sim_obj.one_time_step)
 
         #Check if this is a risky scenario
         num_risks_this_time_step = get_num_risks(new_veh_obj, new_vehicle_parameters, new_sensor_data_obj.lidar_data, exp_details.max_risk_distance)
@@ -137,6 +134,9 @@ function simulate_vehicle_and_humans!(sim::Simulator, vehicle_steering_angle::Fl
     return current_sim_obj
 end
 
+#=
+Run the experiment for extended space planner
+=#
 function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, output)
     # initialize variables
     current_time_value = 0.0
@@ -154,6 +154,7 @@ function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, o
     run_shield = true
     start_time = time()
 
+    try
     # Run simulation
     while(!stop_simulation!(current_sim_obj,current_time_value,exp_details,output))
         state_array = [current_sim_obj.vehicle.x, current_sim_obj.vehicle.y, current_sim_obj.vehicle.theta, current_sim_obj.vehicle.v]
@@ -273,11 +274,10 @@ function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, o
         end
     end
 
-    # catch e
-    #     println("\n Things failed during the simulation. \n The error message is : \n ")
-    #     println(e)
-    #     return exp_details
-    # end
+    catch e
+        println("\n Things failed during the simulation. \n The error message is : \n ")
+        println(e)
+    end
     output.time_taken = current_time_value
 end
 

@@ -6,7 +6,7 @@ Base.copy(obj::Tuple{Array{HumanState,1},Array{Int64,1}}) = (copy(obj[1]),copy(o
 Base.copy(obj::NearbyHumans) = NearbyHumans(copy(obj.position_data),copy(obj.ids),copy(obj.belief))
 Base.copy(obj::HumanState) = HumanState(obj.x,obj.y,obj.v,obj.goal)
 Base.copy(obj::HumanParameters) = HumanParameters(obj.id,obj.path,obj.path_index)
-Base.copy(obj::Simulator, new_vehicle_params) = Simulator(obj.env,obj.vehicle,new_vehicle_params,obj.vehicle_sensor_data,obj.humans,obj.humans_params,obj.one_time_step)
+Base.copy(obj::NavigationSimulator, new_vehicle_params) = NavigationSimulator(obj.env,obj.vehicle,new_vehicle_params,obj.vehicle_sensor_data,obj.humans,obj.humans_params,obj.one_time_step)
 
 #=
 ************************************************************************************************

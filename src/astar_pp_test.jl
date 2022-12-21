@@ -1,16 +1,18 @@
-function propogate_vehicle(vehicle, vehicle_params, vehicle_speed, time_duration, path_planning_details, exp_details)
+function propogate_vehicle(vehicle, vehicle_params, vehicle_speed, current_time, time_duration, path_planning_details, exp_details)
 
-    num_steps_on_vehicle_path = Int64((vehicle_speed * time_duration)/(veh_path_planning_v*time_path_planning))
+    num_steps_on_vehicle_path = Int64((vehicle_speed * time_duration)/(path_planning_details.veh_path_planning_v*path_planning_details.one_time_step))
     time_between_steering_angle_changes = time_duration/num_steps_on_vehicle_path
     num_sim_steps = Int64(time_duration/exp_details.simulator_time_step)
-    simulator_time_duration = time_until_steering_angle_changes/num_sim_steps
+    simulator_time_duration = time_between_steering_angle_changes/num_sim_steps
     CURRENT_TIME_VALUE = current_time
     complete_vehicle_path = Vehicle[]
     final_vehicle_path = OrderedDict(CURRENT_TIME_VALUE => vehicle)
     current_x,current_y,current_theta = vehicle.x,vehicle.y,vehicle.theta
 
-    for i in 1:num_steps_on_vehicle_path
+    num_loop_cycles = min(num_steps_on_vehicle_path, length(vehicle_params.controls_sequence))
+    for i in 1:num_loop_cycles
         steering_angle = vehicle_params.controls_sequence[i]
+        # println(i, "  SA: ", steering_angle)
         for j in 1:num_sim_steps
             new_x,new_y,new_theta = move_vehicle(current_x,current_y,current_theta,vehicle_params.wheelbase,steering_angle,vehicle_speed,simulator_time_duration)
             push!(complete_vehicle_path, Vehicle(new_x,new_y,new_theta,vehicle_speed))
@@ -18,16 +20,28 @@ function propogate_vehicle(vehicle, vehicle_params, vehicle_speed, time_duration
         end
     end
 
-    for i in 1:num_sim_steps
-        CURRENT_TIME_VALUE = current_time + (i*exp_details.simulator_time_step)
-        final_vehicle_path[CURRENT_TIME_VALUE] =  complete_vehicle_path[i*num_steps_on_vehicle_path]
+    if(vehicle_speed == 0.0)
+        for i in 1:num_sim_steps
+            CURRENT_TIME_VALUE = current_time + (i*exp_details.simulator_time_step)
+            final_vehicle_path[CURRENT_TIME_VALUE] = vehicle
+        end
+    else
+        for i in 1:num_sim_steps
+            CURRENT_TIME_VALUE = round(current_time + (i*exp_details.simulator_time_step), digits=1)
+            if(i*num_steps_on_vehicle_path > length(complete_vehicle_path) )
+                final_vehicle_path[CURRENT_TIME_VALUE] = complete_vehicle_path[end]
+            else
+                final_vehicle_path[CURRENT_TIME_VALUE] = complete_vehicle_path[i*num_steps_on_vehicle_path]
+                # println(complete_vehicle_path[i*num_steps_on_vehicle_path])
+            end
+        end
     end
 
     return final_vehicle_path
 end
 
 
-function simulate_vehicle_and_humans!(sim::Simulator, vehicle_trajectory::OrderedDict, current_time::Float64, time_duration::Float64, exp_details::ExperimentDetails, output::Output)
+function simulate_vehicle_and_humans!(sim::NavigationSimulator, vehicle_trajectory::OrderedDict, current_time::Float64, time_duration::Float64, exp_details::ExperimentDetails, output::Output)
 
     current_sim_obj = sim
     number_steps_in_sim = Int64(time_duration/current_sim_obj.one_time_step)
@@ -51,7 +65,7 @@ function simulate_vehicle_and_humans!(sim::Simulator, vehicle_trajectory::Ordere
         new_sensor_data_obj = get_vehicle_sensor_data(new_veh_obj,new_humans,new_humans_params,current_sim_obj.vehicle_sensor_data,exp_details,CURRENT_TIME_VALUE)
 
         #Create a new simulator object
-        new_sim_object = Simulator(current_sim_obj.env, new_veh_obj, new_vehicle_parameters, new_sensor_data_obj, new_humans, new_humans_params, current_sim_obj.one_time_step)
+        new_sim_object = NavigationSimulator(current_sim_obj.env, new_veh_obj, new_vehicle_parameters, new_sensor_data_obj, new_humans, new_humans_params, current_sim_obj.one_time_step)
 
         #Check if this is a risky scenario
         num_risks_this_time_step = get_num_risks(new_veh_obj, new_vehicle_parameters, new_sensor_data_obj.lidar_data, exp_details.max_risk_distance)
@@ -67,7 +81,10 @@ function simulate_vehicle_and_humans!(sim::Simulator, vehicle_trajectory::Ordere
     return current_sim_obj
 end
 
-function run_experiment!(current_sim_obj, exp_details, path_planning_details, pomdp_details, output)
+#=
+Run the experiment for limited space planner
+=#
+function run_experiment!(current_sim_obj, path_planning_details, pomdp_details, exp_details, output)
     # initialize variables
     current_time_value = 0.0
     current_vehicle_speed = 0.0
@@ -77,6 +94,7 @@ function run_experiment!(current_sim_obj, exp_details, path_planning_details, po
     output.sim_objects[current_time_value] = current_sim_obj
     nbh = NearbyHumans(HumanState[], Int64[], HumanGoalsBelief[])
     output.nearby_humans[current_time_value] = nbh
+    modified_vehicle_params = copy(current_sim_obj.vehicle_params)
     next_action = nothing
     info = nothing
     predicted_vehicle_pos_in_goal = false
@@ -102,9 +120,10 @@ function run_experiment!(current_sim_obj, exp_details, path_planning_details, po
     =#
 
     # Run simulation
+    try
     while(!stop_simulation!(current_sim_obj,current_time_value,exp_details,output))
         state_array = [current_sim_obj.vehicle.x, current_sim_obj.vehicle.y, current_sim_obj.vehicle.theta, current_sim_obj.vehicle.v]
-        action_array = [current_action.steering_angle, current_action.delta_speed]
+        action_array = [current_sim_obj.vehicle_params.controls_sequence[1], current_action.delta_speed]
         println("\nTime_k = ", current_time_value,
               "\t State_k = ", round.(state_array, digits=3),
               "\t Action_k = ", round.(action_array, digits=3))
@@ -112,7 +131,8 @@ function run_experiment!(current_sim_obj, exp_details, path_planning_details, po
         #=
         Generate vehicle trajectory using current action
         =#
-        vehicle_trajectory = propogate_vehicle(current_sim_obj.vehicle, current_sim_obj.vehicle_params, current_vehicle_speed, exp_details.one_time_step, path_planning_details, exp_details)
+        vehicle_trajectory = propogate_vehicle(current_sim_obj.vehicle, current_sim_obj.vehicle_params, current_vehicle_speed, current_time_value,
+                                                exp_details.one_time_step, path_planning_details, exp_details)
 
         #=
         Simulate for (one_time_step - path_planning_time - pomdp_planning_time - buffer_time) seconds
@@ -183,13 +203,14 @@ function run_experiment!(current_sim_obj, exp_details, path_planning_details, po
             Define POMDP, POMDP Solver and POMDP Planner
             =#
             rollout_guide = HybridAStarPolicy(modified_vehicle_params.controls_sequence,length(modified_vehicle_params.controls_sequence))
-            planning_pomdp = LimitedSpacePOMDP(pomdp_details,exp_details,veh_params,rollout_guide)
+            planning_pomdp = LimitedSpacePOMDP(pomdp_details,current_sim_obj.env,modified_vehicle_params,rollout_guide)
             pomdp_solver = DESPOTSolver(bounds=IndependentBounds(DefaultPolicyLB(FunctionPolicy(b->calculate_lower_bound(planning_pomdp, b)),max_depth=pomdp_details.tree_search_max_depth),
                                 calculate_upper_bound,check_terminal=true,consistency_fix_thresh=1e-5),K=pomdp_details.num_scenarios,D=pomdp_details.tree_search_max_depth,
                                 T_max=pomdp_details.planning_time,tree_in_info=true)
             planner = POMDPs.solve(pomdp_solver, planning_pomdp);
 
             # Run DESPOT to calculate next action
+            # next_pomdp_action = ActionLimitedSpacePOMDP(0.0)
             next_pomdp_action, info = action_info(planner, b)
             if(debug)
                 println("Finished POMDP planning. Action selected")
@@ -255,10 +276,9 @@ function run_experiment!(current_sim_obj, exp_details, path_planning_details, po
         end
     end
 
-    # catch e
-    #     println("\n Things failed during the simulation. \n The error message is : \n ")
-    #     println(e)
-    #     return exp_details
-    # end
+    catch e
+        println("\n Things failed during the simulation. \n The error message is : \n ")
+        println(e)
+    end
     output.time_taken = current_time_value
 end

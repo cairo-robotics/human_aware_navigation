@@ -39,3 +39,18 @@ for i in 1:30
     push!(p,(s,a,sp))
     s = sp
 end
+
+
+t = 0.0
+s = rand(output.b_root[t]);
+new_vehicle_speed = 0.5
+num_segments_in_one_time_step = Int64(new_vehicle_speed/0.5)
+pt = OrderedDict()
+pt[t] = Vehicle[Vehicle(s.vehicle_x,s.vehicle_y,s.vehicle_theta,new_vehicle_speed)]
+for i in 1:36
+    path = update_vehicle_position(s, planning_pomdp, new_vehicle_speed, num_segments_in_one_time_step)
+    # println(i, " ", path[end])
+    new_s = StateLimitedSpacePOMDP(path[end][1], path[end][2], path[end][3], new_vehicle_speed, s.index_vehicle_controls_sequence+num_segments_in_one_time_step, s.nearby_humans)
+    s = new_s
+    pt[ round(i*planning_pomdp.one_time_step, digits=1) ] =  Vehicle(s.vehicle_x,s.vehicle_y,s.vehicle_theta,new_vehicle_speed)
+end

@@ -108,7 +108,7 @@ function get_plot_will_version(env, vehicle, vehicle_params, nearby_humans, sens
     origin_to_cent = [0.375, 0.0]
     veh = define_vehicle(wheelbase, body_dims, origin_to_cent, 0.0, 0.0)
 
-    p_sim = plot(aspect_ratio=:equal, 
+    p_sim = plot(aspect_ratio=:equal,
         size=(800,800), dpi=300,
         xticks=0:4:20, yticks=0:4:20,
         xlabel="x-axis [m]", ylabel="y-axis [m]",
@@ -123,15 +123,15 @@ function get_plot_will_version(env, vehicle, vehicle_params, nearby_humans, sens
 
     # external anchors
     anchor_dist = 0.55
-    scatter!(p_sim, 
-        [0.0 - anchor_dist, env.length + anchor_dist, env.length + anchor_dist, 0.0 - anchor_dist], 
-        [0.0 - anchor_dist, 0.0 - anchor_dist, env.breadth + anchor_dist, env.breadth + anchor_dist], 
+    scatter!(p_sim,
+        [0.0 - anchor_dist, env.length + anchor_dist, env.length + anchor_dist, 0.0 - anchor_dist],
+        [0.0 - anchor_dist, 0.0 - anchor_dist, env.breadth + anchor_dist, env.breadth + anchor_dist],
         markeralpha=0.0, linealpha=0.0, fillalpha=0.0,
         label="")
 
     # vehicle goal
-    plot!(p_sim, circleShape(vehicle_params.goal.x, vehicle_params.goal.y, exp_details.radius_around_vehicle_goal), 
-        color=:green, fillalpha=0.125,    
+    plot!(p_sim, circleShape(vehicle_params.goal.x, vehicle_params.goal.y, exp_details.radius_around_vehicle_goal),
+        color=:green, fillalpha=0.125,
         linecolor=:green, linewidth=2.0,
         label="Vehicle Goal", seriestype = [:shape,])
 
@@ -144,7 +144,7 @@ function get_plot_will_version(env, vehicle, vehicle_params, nearby_humans, sens
         human_goals[i].x > 1/2*env.length ? x_dir = -1 : x_dir = 1
         human_goals[i].y > 1/2*env.breadth ? y_dir = -1 : y_dir = 1
 
-        Plots.annotate!(human_goals[i].x + x_dir*offset, human_goals[i].y + y_dir*offset, 
+        Plots.annotate!(human_goals[i].x + x_dir*offset, human_goals[i].y + y_dir*offset,
             text(goal_name, :black, :center, 15))
     end
 
@@ -154,8 +154,8 @@ function get_plot_will_version(env, vehicle, vehicle_params, nearby_humans, sens
 
         obs_index == 1 ? lbl = "Obstacle" : lbl = ""
 
-        plot!(p_sim, circleShape(obs.x, obs.y, obs.r), 
-            color=:red, fillalpha=0.125,    
+        plot!(p_sim, circleShape(obs.x, obs.y, obs.r),
+            color=:red, fillalpha=0.125,
             linecolor=:red, linewidth=2.0,
             label=lbl, seriestype = [:shape,])
     end
@@ -171,15 +171,15 @@ function get_plot_will_version(env, vehicle, vehicle_params, nearby_humans, sens
         linez=linez_velocity, clim=(0,linez_clim), colorbar_title="Velocity [m/s]",
         linewidth=2,
         label="")
-    
+
     # vehicle body
     x = [vehicle.x, vehicle.y, vehicle.theta, vehicle.v]
-    scatter!(p_sim, [x[1]], [x[2]], 
+    scatter!(p_sim, [x[1]], [x[2]],
         markershape=:circle, markersize=3, markerstrokewidth=0, markercolor=:black,
         label="")
-    
+
     veh_body = state_to_body(x, veh)
-    plot!(p_sim, veh_body, 
+    plot!(p_sim, veh_body,
         color=:black, alpha=0.125,
         linecolor=:black, linewidth=2.0, linealpha=1.0,
         label="Vehicle")
@@ -199,18 +199,18 @@ function get_plot_will_version(env, vehicle, vehicle_params, nearby_humans, sens
             first_near_flag = false
 
             scatter!(p_sim, [human.x], [human.y], color=:purple, label=lbl)
-            plot!(p_sim, circleShape(human.x, human.y, exp_details.max_risk_distance), 
-                color=:purple, fillalpha=0.125,    
+            plot!(p_sim, circleShape(human.x, human.y, exp_details.max_risk_distance),
+                color=:purple, fillalpha=0.125,
                 linecolor=:purple, linewidth=2.0,
                 label="", seriestype = [:shape,])
-            
+
         elseif(!human_reached_goal)
             first_far_flag == true ? lbl = "Far Human" : lbl = ""
             first_far_flag = false
 
             scatter!(p_sim, [human.x], [human.y], color=:grey, label=lbl)
-            plot!(p_sim, circleShape(human.x, human.y, exp_details.max_risk_distance), 
-                color=:grey, fillalpha=0.125,    
+            plot!(p_sim, circleShape(human.x, human.y, exp_details.max_risk_distance),
+                color=:grey, fillalpha=0.125,
                 linecolor=:grey, linewidth=2.0,
                 label="", seriestype = [:shape,])
         end
@@ -238,13 +238,13 @@ function observe(output,path_planning_details,exp_details,time_value, x_subpath)
     x_k = [v.x, v.y, wrap_between_negative_pi_to_pi(v.theta), v.v]
     push!(x_subpath, x_k)
 
-    p = get_plot_will_version(e, v, vp, nbh, sd, time_value, exp_details, x_subpath)
-    # p = get_plot(e,v,vp,h,hp,sd,nbh,time_value,exp_details)
+    # p = get_plot_will_version(e, v, vp, nbh, sd, time_value, exp_details, x_subpath)
+    p = get_plot(e,v,vp,h,hp,sd,nbh,time_value,exp_details)
 
-    if(hasfield(typeof(vp),:controls_sequence))
-        vehicle_path_x, vehicle_path_y, vehicle_path_theta  = get_vehicle_trajectory(v,vp,time_value,path_planning_details,exp_details)
-        plot!(vehicle_path_x,vehicle_path_y,"grey")
-    end
+    # if(hasfield(typeof(vp),:controls_sequence))
+    #     vehicle_path_x, vehicle_path_y, vehicle_path_theta  = get_vehicle_trajectory(v,vp,time_value,path_planning_details,exp_details)
+    #     plot!(vehicle_path_x,vehicle_path_y,"grey")
+    # end
     # annotate!(env.length/2, env.breadth/2, text("HG", :purple, :right, 20))
-    display(p) 
+    display(p)
 end

@@ -96,13 +96,12 @@ function get_action_cost(world,nearby_humans,vehicle_x,vehicle_y,vehicle_L,actio
     end
 
     #Cost from potential collision with nearby humans
-    for human_index in 1:planning_details.num_nearby_humans
-
+    num_nearby_humans = length(nearby_humans.position_data)
+    for human_index in 1:num_nearby_humans
         # human_dist_threshold = 2.0
         human = nearby_humans.position_data[human_index]
         belief = nearby_humans.belief[human_index].pdf
-        maximum_element, maximumt_element_index = find_maximum_element(nearby_humans.belief[human_index].pdf,planning_details.num_human_goals)
-
+        maximum_element, maximum_element_index = find_maximum_element(nearby_humans.belief[human_index].pdf,planning_details.num_human_goals)
         if(maximum_element < 0.5)
             euclidean_distance = sqrt( (vehicle_x - human.x)^2 + (vehicle_y - human.y)^2)
             if(euclidean_distance >= planning_details.radius_around_uncertain_human)

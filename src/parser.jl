@@ -1,5 +1,22 @@
 # function get_details_from_input_parameters(obj)
 
+function PathPlanningDetails(obj, env)
+
+    human_goals = get_human_goals(env)
+    return PathPlanningDetails(
+    5.0,#=radius_around_uncertain_human::Float64=#
+    obj.min_safe_distance_from_human,#=min_safe_distance_from_human::Float64=#
+    -obj.human_collision_penalty,#=human_collision_cost::Float64=#
+    length(human_goals),#=num_human_goals::Int64=#
+    human_goals,#=human_goals::Array{Location,1}=#
+    obj.veh_path_planning_v,#=veh_path_planning_v::Float64=#
+    obj.radius_around_vehicle_goal,#=radius_around_vehicle_goal::Float64=#
+    0.99,#=lambda::Float64=#
+    0.5,#=one_time_step::Float64=#
+    0.1#=planning_time::Float64=#
+    )
+end
+
 function POMPDPlanningDetails(obj)
     return POMPDPlanningDetails(
         obj.num_nearby_humans, #=num_nearby_humans::Int64=#
@@ -54,6 +71,8 @@ function OutputObj()
         false, #=vehicle_ran_into_boundary_wall::Bool=#
         false, #=vehicle_ran_into_obstacle::Bool=#
         false, #=vehicle_reached_goal::Bool=#
+        OrderedDict(), #=vehicle_trajectory_executed::OrderedDict=#
+        OrderedDict(), #=vehicle_trajectory_future::OrderedDict=#
         OrderedDict(), #=pomdp_planners::OrderedDict=#
         OrderedDict(), #=nearby_humans::OrderedDict=#
         OrderedDict(), #=b_root::OrderedDict=#

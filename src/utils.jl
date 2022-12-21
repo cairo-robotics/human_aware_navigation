@@ -22,6 +22,22 @@ function wrap_between_0_and_2Pi(theta)
    return mod(theta,2*pi)
 end
 
+function wrap_between_negative_pi_to_pi(theta)
+    if(theta>pi)
+        return theta-2*pi
+    else
+        return theta
+    end
+end
+
+function wrap_between_0_to_2pi(theta)
+    if(theta<0.0)
+        return theta+2*pi
+    else
+        return theta
+    end
+end
+
 function in_obstacle(px,py,obstacle,padding=0.0)
     return is_within_range(px,py,obstacle.x,obstacle.y,obstacle.r+padding)
 end

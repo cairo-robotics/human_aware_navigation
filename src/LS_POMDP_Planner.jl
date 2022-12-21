@@ -36,11 +36,15 @@ struct LimitedSpacePOMDP{P} <: POMDPs.POMDP{StateLimitedSpacePOMDP,ActionLimited
     human_collision_penalty::Float64
     radius_around_vehicle_goal::Float64
     goal_reached_reward::Float64
-    vehicle_L::Float64
+    vehicle_wheelbase::Float64
+    vehicle_length::Float64
+    vehicle_breadth::Float64
+    vehicle_D::Float64
+    vehicle_R::Float64
     max_vehicle_speed::Float64
+    vehicle_action_delta_speed::Float64
     vehicle_goal::Location
     one_time_step::Float64
-    num_segments_in_one_time_step::Int64
     observation_discretization_length::Float64
     d_near::Float64
     d_far::Float64
@@ -48,7 +52,7 @@ struct LimitedSpacePOMDP{P} <: POMDPs.POMDP{StateLimitedSpacePOMDP,ActionLimited
     rollout_guide::P
 end
 
-function LimitedSpacePOMDP(pomdp_details,exp_details,vehicle_params,rollout_guide)
+function LimitedSpacePOMDP(pomdp_details,env,vehicle_params,rollout_guide)
 
     return LimitedSpacePOMDP(
         pomdp_details.discount_factor,
@@ -57,14 +61,18 @@ function LimitedSpacePOMDP(pomdp_details,exp_details,vehicle_params,rollout_guid
         pomdp_details.radius_around_vehicle_goal,
         pomdp_details.goal_reached_reward,
         vehicle_params.wheelbase,
+        vehicle_params.length,
+        vehicle_params.breadth,
+        vehicle_params.dist_origin_to_center,
+        vehicle_params.radius,
         pomdp_details.max_vehicle_speed,
+        pomdp_details.action_delta_speed,
         vehicle_params.goal,
         pomdp_details.one_time_step,
-        pomdp_details.num_segments_in_one_time_step,
         pomdp_details.observation_discretization_length,
         pomdp_details.d_near,
         pomdp_details.d_far,
-        exp_details.env,
+        env,
         rollout_guide
         )
 end
@@ -109,18 +117,25 @@ function update_vehicle_position(s, m, new_vehicle_speed, num_segments_in_one_ti
         vehicle_path = repeat(vehicle_path, num_segments_in_one_time_step+1)
     else
         vehicle_path = Tuple{Float64,Float64,Float64}[ (current_x, current_y, current_theta) ]
+        time_duration = m.one_time_step/num_segments_in_one_time_step
+
         for i in 1:num_segments_in_one_time_step
+            # println(s.index_vehicle_controls_sequence , " ", s.index_vehicle_controls_sequence+i-1, " ", m.rollout_guide.len)
+            # println(s)
+            # println("SA is : ", steering_angle)
+            # if(steering_angle == 0.0)
+            #     new_theta = current_theta
+            #     new_x = current_x + new_vehicle_speed*cos(current_theta)*(m.one_time_step/num_segments_in_one_time_step)
+            #     new_y = current_y + new_vehicle_speed*sin(current_theta)*(m.one_time_step/num_segments_in_one_time_step)
+            # else
+            #     new_theta = current_theta + (new_vehicle_speed * tan(steering_angle) * (m.one_time_step/num_segments_in_one_time_step) / m.vehicle_wheelbase)
+            #     new_theta = wrap_between_0_and_2Pi(new_theta)
+            #     new_x = current_x + ((m.vehicle_wheelbase / tan(steering_angle)) * (sin(new_theta) - sin(current_theta)))
+            #     new_y = current_y + ((m.vehicle_wheelbase / tan(steering_angle)) * (cos(current_theta) - cos(new_theta)))
+            # end
             steering_angle = m.rollout_guide.controls_sequence[s.index_vehicle_controls_sequence+i-1]
-            if(steering_angle == 0.0)
-                new_theta = current_theta
-                new_x = current_x + new_vehicle_speed*cos(current_theta)*(m.one_time_step/num_segments_in_one_time_step)
-                new_y = current_y + new_vehicle_speed*sin(current_theta)*(m.one_time_step/num_segments_in_one_time_step)
-            else
-                new_theta = current_theta + (new_vehicle_speed * tan(steering_angle) * (m.one_time_step/num_segments_in_one_time_step) / m.vehicle_L)
-                new_theta = wrap_between_0_and_2Pi(new_theta)
-                new_x = current_x + ((m.vehicle_L / tan(steering_angle)) * (sin(new_theta) - sin(current_theta)))
-                new_y = current_y + ((m.vehicle_L / tan(steering_angle)) * (cos(current_theta) - cos(new_theta)))
-            end
+            # println(s.index_vehicle_controls_sequence+i-1, " SA: ", steering_angle)
+            new_x,new_y,new_theta = move_vehicle(current_x,current_y,current_theta,m.vehicle_wheelbase,steering_angle,new_vehicle_speed,time_duration)
             push!(vehicle_path,(new_x,new_y,new_theta))
             current_x,current_y,current_theta = new_x,new_y,new_theta
             if(s.index_vehicle_controls_sequence+i > m.rollout_guide.len)
@@ -170,14 +185,14 @@ function POMDPs.gen(m::LimitedSpacePOMDP, s, a, rng)
 
     for human in s.nearby_humans
         if(s.vehicle_v != 0.0)
-            if( is_within_range(s.vehicle_x, s.vehicle_y, human.x, human.y, m.min_safe_distance_from_human+m.vehicle_L) )
+            if( is_within_range(s.vehicle_x, s.vehicle_y, human.x, human.y, m.min_safe_distance_from_human+m.vehicle_R) )
                 # println("Collision with this human " ,s.nearby_humans[human_index] , " ", time_index )
                 # println("Vehicle's position is " ,vehicle_path[time_index] , "\nHuman's position is ", intermediate_human_location )
                 new_vehicle_position = (-100.0, -100.0, -100.0)
                 collision_with_human = true
                 # next_human_states = human_state[]
                 observed_positions = Location[ Location(-50.0,-50.0) ]
-                sp = StateLimitedSpacePOMDP(new_vehicle_position[1],new_vehicle_position[2],new_vehicle_position[3],s.vehicle_v,next_human_states)
+                sp = StateLimitedSpacePOMDP(new_vehicle_position[1],new_vehicle_position[2],new_vehicle_position[3],s.vehicle_v,-1,next_human_states)
                 r = human_collision_penalty(collision_with_human, m.human_collision_penalty)
                 return (sp=sp, o=observed_positions, r=r)
             end
@@ -190,7 +205,7 @@ function POMDPs.gen(m::LimitedSpacePOMDP, s, a, rng)
         vehicle_reached_goal = true
         # next_human_states = human_state[]
         observed_positions = Location[ Location(-50.0,-50.0) ]
-        sp = StateLimitedSpacePOMDP(new_vehicle_position[1],new_vehicle_position[2],new_vehicle_position[3],s.vehicle_v,next_human_states)
+        sp = StateLimitedSpacePOMDP(new_vehicle_position[1],new_vehicle_position[2],new_vehicle_position[3],s.vehicle_v,-1,next_human_states)
         r = vehicle_goal_reached_reward(vehicle_reached_goal, m.goal_reached_reward)
         return (sp=sp, o=observed_positions, r=r)
     end
@@ -199,7 +214,7 @@ function POMDPs.gen(m::LimitedSpacePOMDP, s, a, rng)
         immediate_stop = true
     end
     new_vehicle_speed = clamp(s.vehicle_v + a.delta_speed, 0.0, m.max_vehicle_speed)
-    num_segments_in_one_time_step = Int(new_vehicle_speed/m.speed_change)
+    num_segments_in_one_time_step = Int(new_vehicle_speed/m.vehicle_action_delta_speed)
     vehicle_path = update_vehicle_position(s, m, new_vehicle_speed, num_segments_in_one_time_step)
     new_vehicle_position = vehicle_path[end]
 
@@ -211,14 +226,14 @@ function POMDPs.gen(m::LimitedSpacePOMDP, s, a, rng)
             human_path_x = LinRange(human.x,modified_human_state.x,num_segments_in_one_time_step+1)
             human_path_y = LinRange(human.y,modified_human_state.y,num_segments_in_one_time_step+1)
             for time_index in 2:num_segments_in_one_time_step+1
-                if( is_within_range(vehicle_path[time_index][1],vehicle_path[time_index][2],human_path_x[time_index],human_path_y[time_index],m.min_safe_distance_from_human+m.vehicle_L) )
+                if( is_within_range(vehicle_path[time_index][1],vehicle_path[time_index][2],human_path_x[time_index],human_path_y[time_index],m.min_safe_distance_from_human+m.vehicle_R) )
                     # println("Collision with this human " ,human , "at time ", time_index )
                     # println("Vehicle's position is " ,vehicle_path[time_index] , "\nHuman's position is ", (human_path_x[time_index],human_path_y[time_index]) )
                     new_vehicle_position = (-100.0, -100.0, -100.0)
                     collision_with_human = true
                     next_human_states = HumanState[]
                     observed_positions = Location[ Location(-50.0,-50.0) ]
-                    sp = StateLimitedSpacePOMDP(new_vehicle_position[1],new_vehicle_position[2],new_vehicle_position[3],new_vehicle_speed,next_human_states)
+                    sp = StateLimitedSpacePOMDP(new_vehicle_position[1],new_vehicle_position[2],new_vehicle_position[3],new_vehicle_speed,-1,next_human_states)
                     r = human_collision_penalty(collision_with_human, m.human_collision_penalty)
                     return (sp=sp, o=observed_positions, r=r)
                 end
@@ -243,6 +258,7 @@ function POMDPs.gen(m::LimitedSpacePOMDP, s, a, rng)
     #     r = vehicle_goal_reached_reward(vehicle_reached_goal, m.goal_reached_reward)
     #     return (sp=sp, o=observed_positions, r=r)
     # end
+
 
     # If the code reaches here, then both s and sp are safe states. Define corresponding new POMDP state.
     sp = StateLimitedSpacePOMDP(new_vehicle_position[1],new_vehicle_position[2],new_vehicle_position[3],new_vehicle_speed,
@@ -288,11 +304,11 @@ Upper bound value function for DESPOT
 =#
 
 function is_collision_state(s::StateLimitedSpacePOMDP,m::LimitedSpacePOMDP)
-    if((s.vehicle_v == 0.0)
+    if(s.vehicle_v == 0.0)
         return false
     else
         for human in s.nearby_humans
-            if( is_within_range(s.vehicle_x,s.vehicle_y,human.x,human.y,m.min_safe_distance_from_human+m.vehicle_L) )
+            if( is_within_range(s.vehicle_x,s.vehicle_y,human.x,human.y,m.min_safe_distance_from_human+m.vehicle_R) )
                 return true
             end
         end
@@ -345,7 +361,7 @@ Lower bound policy function for DESPOT
 =#
 function calculate_lower_bound(m::LimitedSpacePOMDP,b)
     #Implement a reactive controller for your lower bound
-    delta_speed = m.speed_change
+    delta_speed = m.vehicle_action_delta_speed
 
     #This bool is also used to check if all the states in the belief are terminal or not.
     first_execution_flag = true
@@ -363,12 +379,12 @@ function calculate_lower_bound(m::LimitedSpacePOMDP,b)
                         dist_to_closest_human = euclidean_distance
                     end
                     if(dist_to_closest_human < m.d_near)
-                        delta_speed = -m.speed_change
+                        delta_speed = -delta_speed
                         return ActionLimitedSpacePOMDP(delta_speed)
                     end
                 end
                 if(dist_to_closest_human > m.d_far)
-                    chosen_delta_speed = m.speed_change
+                    chosen_delta_speed = delta_speed
                 else
                     chosen_delta_speed = 0.0
                 end
@@ -391,9 +407,9 @@ end
 Action Function for the POMDP
 =#
 function get_actions(m::LimitedSpacePOMDP,b)
-        return [ActionLimitedSpacePOMDP(-m.speed_change),
+        return [ActionLimitedSpacePOMDP(-m.vehicle_action_delta_speed),
                 ActionLimitedSpacePOMDP(0.0),
-                ActionLimitedSpacePOMDP(m.speed_change),
+                ActionLimitedSpacePOMDP(m.vehicle_action_delta_speed),
                 ActionLimitedSpacePOMDP(-10.0)
                 ]
 end
