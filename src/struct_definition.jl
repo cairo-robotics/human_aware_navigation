@@ -207,8 +207,8 @@ mutable struct Output
     vehicle_ran_into_boundary_wall::Bool
     vehicle_ran_into_obstacle::Bool
     vehicle_reached_goal::Bool
-    vehicle_trajectory_executed::OrderedDict
-    vehicle_trajectory_future::OrderedDict
+    vehicle_executed_trajectory::OrderedDict
+    vehicle_future_trajectory::OrderedDict
     pomdp_planners::OrderedDict
     nearby_humans::OrderedDict
     b_root::OrderedDict

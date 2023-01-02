@@ -12,7 +12,6 @@ function propogate_vehicle(vehicle, vehicle_params, vehicle_speed, current_time,
     num_loop_cycles = min(num_steps_on_vehicle_path, length(vehicle_params.controls_sequence))
     for i in 1:num_loop_cycles
         steering_angle = vehicle_params.controls_sequence[i]
-        # println(i, "  SA: ", steering_angle)
         for j in 1:num_sim_steps
             new_x,new_y,new_theta = move_vehicle(current_x,current_y,current_theta,vehicle_params.wheelbase,steering_angle,vehicle_speed,simulator_time_duration)
             push!(complete_vehicle_path, Vehicle(new_x,new_y,new_theta,vehicle_speed))
@@ -23,7 +22,7 @@ function propogate_vehicle(vehicle, vehicle_params, vehicle_speed, current_time,
     if(vehicle_speed == 0.0)
         for i in 1:num_sim_steps
             CURRENT_TIME_VALUE = current_time + (i*exp_details.simulator_time_step)
-            final_vehicle_path[CURRENT_TIME_VALUE] = vehicle
+            final_vehicle_path[CURRENT_TIME_VALUE] = Vehicle(vehicle.x,vehicle.y,vehicle.theta,vehicle_speed)
         end
     else
         for i in 1:num_sim_steps
@@ -36,7 +35,6 @@ function propogate_vehicle(vehicle, vehicle_params, vehicle_speed, current_time,
             end
         end
     end
-
     return final_vehicle_path
 end
 
@@ -261,8 +259,8 @@ function run_experiment!(current_sim_obj, path_planning_details, pomdp_details, 
         #=
         Set parameters for the next cycle
         =#
-        current_vehicle_speed = clamp((current_vehicle_speed + next_action.delta_speed), 0.0, pomdp_details.max_vehicle_speed)
         current_action = next_action
+        current_vehicle_speed = clamp((current_vehicle_speed + current_action.delta_speed), 0.0, pomdp_details.max_vehicle_speed)
         current_time_value += time_duration_until_next_action_is_applied
         current_sim_obj = copy(current_sim_obj,modified_vehicle_params)
         output.sim_objects[current_time_value] = current_sim_obj

@@ -92,5 +92,5 @@ if(create_gif)
         # observe(output, path_planning_details, exp_details, k);
         observe(output, exp_details, exp_details, k, x_subpath);
     end
-    gif(anim, "es_planner.gif", fps = 10)
+    gif(anim, "ls_planner.gif", fps = 10)
 end
