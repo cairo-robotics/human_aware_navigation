@@ -25,7 +25,7 @@ include("shielding/shield_wrappers.jl")
 
 # include("configs/aspen_inputs.jl")
 # include("configs/aspen_inputs2.jl")
-include("env_inputs/small_obstacles_20x20.jl")
+include("configs/small_obstacles_20x20.jl")
 # include("configs/no_obstacles_big.jl")
 
 #=
@@ -52,12 +52,6 @@ exp_details.env = env
 exp_details.human_goal_locations = get_human_goals(env)
 
 #=
-Define Humans
-=#
-env_humans, env_humans_params = generate_humans(env,veh,exp_details.human_start_v,exp_details.human_goal_locations,exp_details.num_humans_env,
-                                        exp_details.simulator_time_step, exp_details.user_defined_rng)
-
-#=
 Define Vehicle
 =#
 veh = Vehicle(input_config.veh_start_x, input_config.veh_start_y, input_config.veh_start_theta, input_config.veh_start_v)
@@ -67,14 +61,18 @@ r = sqrt( (0.5*input_config.veh_length)^2 + (0.5*input_config.veh_breadth)^2 )
 veh_params = VehicleParametersESPlanner(input_config.veh_wheelbase,input_config.veh_length,
                 input_config.veh_breadth,input_config.veh_dist_origin_to_center, r,
                 input_config.veh_max_speed,input_config.veh_max_steering_angle,veh_goal)
-body_dims = [veh_params.length, veh_params.breadth]
-origin_to_cent = [veh_params.dist_origin_to_center, 0.0]
-veh_body = define_vehicle(veh_params.wheelbase, body_dims, origin_to_cent, veh_params.max_steering_angle, veh_params.max_speed)
+veh_body_origin = get_vehicle_body_origin(veh_params.dist_origin_to_center,0.0,veh_params.length,veh_params.breadth)
+
+#=
+Define Humans
+=#
+env_humans, env_humans_params = generate_humans(env,veh,exp_details.human_start_v,exp_details.human_goal_locations,exp_details.num_humans_env,
+                                        exp_details.simulator_time_step, exp_details.user_defined_rng)
 
 #=
 Create sim object
 =#
-initial_sim_obj = Simulator(env,veh,veh_params,veh_sensor_data,env_humans,env_humans_params,exp_details.simulator_time_step)
+initial_sim_obj = NavigationSimulator(env,veh,veh_params,veh_sensor_data,env_humans,env_humans_params,exp_details.simulator_time_step)
 
 #=
 Solve HJB equation for the given environment and vehicle
@@ -85,7 +83,7 @@ Dval_tol = 0.1
 HJB_planning_details = HJBPlanningDetails(Dt, max_solve_steps, Dval_tol, veh_params.max_steering_angle, veh_params.max_speed)
 policy_path = "/home/himanshu/Documents/Research/human_aware_navigation/src"
 solve_HJB = true
-# solve_HJB = false
+solve_HJB = false
 if(solve_HJB)
     println("Solving HJB equation for given environment ....")
     rollout_guide = HJBPolicy(HJB_planning_details, exp_details, veh_params)
@@ -102,13 +100,13 @@ Define POMDP, POMDP Solver and POMDP Planner
 extended_space_pomdp = ExtendedSpacePOMDP(pomdp_details,env,veh_params,rollout_guide)
 pomdp_solver = DESPOTSolver(bounds=IndependentBounds(DefaultPolicyLB(FunctionPolicy(b->calculate_lower_bound(extended_space_pomdp, b)),max_depth=pomdp_details.tree_search_max_depth),
                     calculate_upper_bound,check_terminal=true,consistency_fix_thresh=1e-5),K=pomdp_details.num_scenarios,D=pomdp_details.tree_search_max_depth,
-                    T_max=pomdp_details.planning_time*6,tree_in_info=true,default_action=default_es_pomdp_action)
+                    T_max=pomdp_details.planning_time*1,tree_in_info=true)#,default_action=default_es_pomdp_action)
 pomdp_planner = POMDPs.solve(pomdp_solver, extended_space_pomdp);
 
 #=
 Run the experiment
 =#
-run_experiment!(initial_sim_obj, pomdp_planner, exp_details, pomdp_details, output)
+run_experiment!(initial_sim_obj, pomdp_planner, pomdp_details, exp_details, output)
 
 #=
 Print useful values from the experiment
@@ -120,11 +118,9 @@ Create Gif
 create_gif = true
 # create_gif = false
 if(create_gif)
-    x_path = []
-    x_subpath = []
+    vehicle_executed_trajectory = []
     anim = @animate for k ∈ keys(output.sim_objects)
-        # observe(output, path_planning_details, exp_details, k);
-        observe(output, exp_details, exp_details, k, x_subpath);
+        observe(output, exp_details, k, veh_body_origin, vehicle_executed_trajectory);
     end
     gif(anim, "es_planner.gif", fps = 10)
 end

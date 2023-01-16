@@ -190,7 +190,8 @@ end
     num_scenarios::Int64 = 100
     d_near::Float64 = 0.5
     d_far::Float64 = 0.5
-    pomdp_planning_time::Float64 = 0.3
+    ES_pomdp_planning_time::Float64 = 0.4
+    LS_pomdp_planning_time::Float64 = 0.3
     pomdp_action_max_delta_heading_angle::Float64 = pi/4
     pomdp_action_delta_speed::Float64 = 0.5
     one_time_step::Float64 = 0.5
@@ -207,8 +208,8 @@ mutable struct Output
     vehicle_ran_into_boundary_wall::Bool
     vehicle_ran_into_obstacle::Bool
     vehicle_reached_goal::Bool
-    vehicle_executed_trajectory::OrderedDict
-    vehicle_future_trajectory::OrderedDict
+    #vehicle_executed_trajectory::OrderedDict
+    vehicle_expected_trajectory::OrderedDict
     pomdp_planners::OrderedDict
     nearby_humans::OrderedDict
     b_root::OrderedDict

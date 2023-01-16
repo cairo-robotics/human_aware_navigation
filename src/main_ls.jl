@@ -10,7 +10,6 @@ include("simulator.jl")
 include("simulator_utils.jl")
 include("parser.jl")
 include("visualization.jl")
-include("astar_pp_test.jl")
 # include("configs/aspen_inputs.jl")
 # include("configs/aspen_inputs2.jl")
 include("configs/small_obstacles_20x20.jl")
@@ -31,6 +30,7 @@ env = generate_environment(input_config.env_length,input_config.env_breadth,inpu
 Define experiment details and POMDP planning details
 =#
 pomdp_details = POMPDPlanningDetails(input_config)
+pomdp_details.planning_time = input_config.LS_pomdp_planning_time
 exp_details = ExperimentDetails(input_config)
 exp_details.env = env
 exp_details.human_goal_locations = get_human_goals(env)
@@ -49,6 +49,7 @@ r = sqrt( (0.5*input_config.veh_length)^2 + (0.5*input_config.veh_breadth)^2 )
 temp_veh_params = VehicleParametersLSPlanner(input_config.veh_wheelbase,input_config.veh_length,
                 input_config.veh_breadth,input_config.veh_dist_origin_to_center, r,
                 input_config.veh_max_speed,input_config.veh_max_steering_angle,veh_goal,Float64[])
+veh_body_origin = get_vehicle_body_origin(temp_veh_params.dist_origin_to_center, 0.0,temp_veh_params.length, temp_veh_params.breadth)
 
 #=
 Find hybrid A* path for the given environment and vehicle.
@@ -59,7 +60,6 @@ vehicle_controls_sequence = hybrid_astar_search(env,veh,temp_veh_params,vehicle_
 veh_params = VehicleParametersLSPlanner(input_config.veh_wheelbase,input_config.veh_length,
                 input_config.veh_breadth,input_config.veh_dist_origin_to_center, r,
                 input_config.veh_max_speed,input_config.veh_max_steering_angle,veh_goal,vehicle_controls_sequence)
-# rollout_guide = HybridAStarPolicy(veh_params.controls_sequence,length(veh_params.controls_sequence))
 
 #=
 Define Humans
@@ -86,11 +86,9 @@ Print useful values from the experiment
 create_gif = true
 # create_gif = false
 if(create_gif)
-    x_path = []
-    x_subpath = []
+    vehicle_executed_trajectory = []
     anim = @animate for k ∈ keys(output.sim_objects)
-        # observe(output, path_planning_details, exp_details, k);
-        observe(output, exp_details, exp_details, k, x_subpath);
+        observe(output, exp_details, k, veh_body_origin, vehicle_executed_trajectory);
     end
     gif(anim, "ls_planner.gif", fps = 10)
 end

@@ -79,6 +79,7 @@ end
 function immediate_stop_penalty(immediate_stop_flag::Bool, penalty::Float64)
     if(immediate_stop_flag)
         return penalty/10.0
+        # return 0.0
     else
         return 0.0
     end
@@ -87,7 +88,7 @@ end
 #Penalty for heading angle changes
 function heading_angle_change_penalty(steering_angle::Float64)
     if(steering_angle != 0.0)
-        return -2.0
+        return -10.0
     else
         return 0.0
     end

@@ -258,12 +258,17 @@ Function to check if the encountered scenario is a risky scenario
 function get_num_risks(vehicle,vehicle_params,human_position_data,min_safe_distance_from_human)
     risks = 0
     if(vehicle.v!=0.0)
-        vehicle_center_x = vehicle.x + vehicle_params.dist_origin_to_center*cos(vehicle.theta)
-        vehicle_center_y = vehicle.y + vehicle_params.dist_origin_to_center*sin(vehicle.theta)
+        vehicle_center_x = vehicle.x # + vehicle_params.dist_origin_to_center*cos(vehicle.theta)
+        vehicle_center_y = vehicle.y #+ vehicle_params.dist_origin_to_center*sin(vehicle.theta)
         for human in human_position_data
             euclidean_distance = sqrt( (human.x - vehicle_center_x)^2 + (human.y - vehicle_center_y)^2 )
             if(euclidean_distance<=(vehicle_params.radius+min_safe_distance_from_human))
+            # if(euclidean_distance<=(min_safe_distance_from_human))
                 println( "A risky scenario encountered and the distance is : ", euclidean_distance )
+                println( "Minimum allowed distance is : ", min_safe_distance_from_human )
+                println(human)
+                println("Vehicle x : ", vehicle.x, " Vehicle y : ", vehicle.y)
+                println("Vehicle Center x : ", vehicle_center_x, " Vehicle Center y : ", vehicle_center_y)
                 risks += 1
             end
         end

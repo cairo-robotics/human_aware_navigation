@@ -13,10 +13,54 @@ end
 Function for moving vehicle in the environment
 Returns a vehicle struct object
 =#
+
+#Propogte vehicle for Extended Space Planner
 function propogate_vehicle(vehicle::Vehicle, vehicle_params::VehicleParametersESPlanner, steering_angle::Float64, speed::Float64, time_duration::Float64)
     new_x,new_y,new_theta =  move_vehicle(vehicle.x,vehicle.y,vehicle.theta,vehicle_params.wheelbase,steering_angle,speed,time_duration)
     return Vehicle(new_x,new_y,new_theta,speed)
 end
+
+#Propogte vehicle for Limited Space Planner
+function propogate_vehicle(vehicle::Vehicle, vehicle_params::VehicleParametersLSPlanner, vehicle_speed::Float64, current_time::Float64,
+                                    time_duration::Float64, path_planning_details, exp_details)
+
+    num_steps_on_vehicle_path = Int64((vehicle_speed * time_duration)/(path_planning_details.veh_path_planning_v*path_planning_details.one_time_step))
+    time_between_steering_angle_changes = time_duration/num_steps_on_vehicle_path
+    num_sim_steps = Int64(time_duration/exp_details.simulator_time_step)
+    simulator_time_duration = time_between_steering_angle_changes/num_sim_steps
+    CURRENT_TIME_VALUE = current_time
+    complete_vehicle_path = Vehicle[]
+    final_vehicle_path = OrderedDict(CURRENT_TIME_VALUE => vehicle)
+    current_x,current_y,current_theta = vehicle.x,vehicle.y,vehicle.theta
+
+    num_loop_cycles = min(num_steps_on_vehicle_path, length(vehicle_params.controls_sequence))
+    for i in 1:num_loop_cycles
+        steering_angle = vehicle_params.controls_sequence[i]
+        for j in 1:num_sim_steps
+            new_x,new_y,new_theta = move_vehicle(current_x,current_y,current_theta,vehicle_params.wheelbase,steering_angle,vehicle_speed,simulator_time_duration)
+            push!(complete_vehicle_path, Vehicle(new_x,new_y,new_theta,vehicle_speed))
+            current_x,current_y,current_theta = new_x,new_y,new_theta
+        end
+    end
+
+    if(vehicle_speed == 0.0)
+        for i in 1:num_sim_steps
+            CURRENT_TIME_VALUE = round(current_time + (i*exp_details.simulator_time_step), digits=1)
+            final_vehicle_path[CURRENT_TIME_VALUE] = Vehicle(vehicle.x,vehicle.y,vehicle.theta,vehicle_speed)
+        end
+    else
+        for i in 1:num_sim_steps
+            CURRENT_TIME_VALUE = round(current_time + (i*exp_details.simulator_time_step), digits=1)
+            if(i*num_steps_on_vehicle_path > length(complete_vehicle_path) )
+                final_vehicle_path[CURRENT_TIME_VALUE] = complete_vehicle_path[end]
+            else
+                final_vehicle_path[CURRENT_TIME_VALUE] = complete_vehicle_path[i*num_steps_on_vehicle_path]
+            end
+        end
+    end
+    return final_vehicle_path,num_loop_cycles
+end
+
 
 #=
 Function for moving human in the environment
@@ -46,6 +90,32 @@ end
 function modify_vehicle_params(params::VehicleParametersLSPlanner, new_controls_sequence)
     return VehicleParametersLSPlanner(params.wheelbase,params.length,params.breadth,params.dist_origin_to_center,params.radius,params.max_speed,
                 params.max_steering_angle,params.goal,new_controls_sequence)
+end
+
+function get_future_vehicle_trajectory(current_action_trajectory, vehicle_params, new_start_index, path_planning_details,exp_details)
+    new_vehicle_position = collect(values(current_action_trajectory))[end]
+    trajectory_after_current_action = get_hybrid_astar_trajectory(new_vehicle_position,vehicle_params,new_start_index,path_planning_details,exp_details)
+
+    time_values = collect(keys(current_action_trajectory))
+    future_vehicle_trajectory_dict = OrderedDict()
+
+    for i in 1:length(time_values)
+        curr_vehicle = current_action_trajectory[time_values[i]]
+        vehicle_future_trajectory_x = [curr_vehicle.x]
+        vehicle_future_trajectory_y = [curr_vehicle.y]
+        vehicle_future_trajectory_theta = [curr_vehicle.theta]
+        for j in i+1:length(time_values)
+            veh = current_action_trajectory[time_values[j]]
+            push!(vehicle_future_trajectory_x,veh.x)
+            push!(vehicle_future_trajectory_y,veh.y)
+            push!(vehicle_future_trajectory_theta,veh.theta)
+        end
+        vehicle_future_trajectory_x = [vehicle_future_trajectory_x; trajectory_after_current_action[1]]
+        vehicle_future_trajectory_y = [vehicle_future_trajectory_y; trajectory_after_current_action[2]]
+        vehicle_future_trajectory_theta = [vehicle_future_trajectory_theta; trajectory_after_current_action[3]]
+        future_vehicle_trajectory_dict[time_values[i]] = (vehicle_future_trajectory_x,vehicle_future_trajectory_y,vehicle_future_trajectory_theta)
+    end
+    return future_vehicle_trajectory_dict
 end
 
 #=
@@ -85,6 +155,7 @@ function stop_simulation!(sim_obj,curr_time,exp_details,output)
 end
 
 #=
+For Extended Space Planner
 Function to simulate vehicle and humans in the environment for given time duration.
 Propogate humans for simulator's one time step.
 Propogate vehicle for simulator's one time step.
@@ -135,9 +206,64 @@ function simulate_vehicle_and_humans!(sim::NavigationSimulator, vehicle_steering
 end
 
 #=
-Run the experiment for extended space planner
+For Limited Space Planner
+Function to simulate vehicle and humans in the environment for given time duration.
+Propogate humans for simulator's one time step.
+Propogate vehicle for simulator's one time step.
+Get new vehicle sensor data.
+Create new struct object for vehicle params.
+Create new struct object for the vehicle.
+Create new struct object for the humans.
 =#
-function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, output)
+function simulate_vehicle_and_humans!(sim::NavigationSimulator, vehicle_trajectory::OrderedDict, goal_paths::OrderedDict,
+                                    current_time::Float64, time_duration::Float64, exp_details::ExperimentDetails, output::Output)
+
+    current_sim_obj = sim
+    number_steps_in_sim = Int64(time_duration/current_sim_obj.one_time_step)
+
+    for i in 1:number_steps_in_sim
+        CURRENT_TIME_VALUE = round(current_time + (i*current_sim_obj.one_time_step), digits=1)
+        propogated_humans = Array{HumanState,1}(undef,exp_details.num_humans_env)
+        for i in 1:exp_details.num_humans_env
+            # propogated_humans[i] = propogate_human(current_sim_obj.humans[i], current_sim_obj.env, current_sim_obj.one_time_step, exp_details.user_defined_rng)
+            propogated_humans[i] = propogate_human(current_sim_obj.humans[i], current_sim_obj.humans_params[i])
+            # current_sim_obj.humans_params[i].path_index = clamp(current_sim_obj.humans_params[i].path_index+1,1,length(current_sim_obj.humans_params[i].path))
+            current_sim_obj.humans_params[i].path_index += 1
+        end
+        #Get new vehicle object and new vehicle_params object
+        new_veh_obj = vehicle_trajectory[CURRENT_TIME_VALUE]
+        new_vehicle_parameters = copy(current_sim_obj.vehicle_params)
+        # new_humans,new_humans_params = propogated_humans,copy(current_sim_obj.humans_params)
+        new_humans, new_humans_params = respawn_humans(propogated_humans,current_sim_obj.humans_params,new_veh_obj,new_vehicle_parameters,exp_details)
+
+        #Get new vehicle sensor data
+        new_sensor_data_obj = get_vehicle_sensor_data(new_veh_obj,new_humans,new_humans_params,current_sim_obj.vehicle_sensor_data,exp_details,CURRENT_TIME_VALUE)
+
+        #Create a new simulator object
+        new_sim_object = NavigationSimulator(current_sim_obj.env, new_veh_obj, new_vehicle_parameters, new_sensor_data_obj, new_humans, new_humans_params, current_sim_obj.one_time_step)
+
+        #Check if this is a risky scenario
+        num_risks_this_time_step = get_num_risks(new_veh_obj, new_vehicle_parameters, new_sensor_data_obj.lidar_data, exp_details.max_risk_distance)
+        if(num_risks_this_time_step!=0)
+            output.number_risky_scenarios += num_risks_this_time_step
+            output.risky_scenarios[CURRENT_TIME_VALUE] = new_sim_object
+        end
+
+        #Get the vehicle trajectory from current position to its goal
+        expected_vehicle_trajectory_to_goal = goal_paths[CURRENT_TIME_VALUE]
+        output.vehicle_expected_trajectory[CURRENT_TIME_VALUE] = expected_vehicle_trajectory_to_goal
+        output.sim_objects[CURRENT_TIME_VALUE] = new_sim_object
+        output.nearby_humans[CURRENT_TIME_VALUE] = copy(output.nearby_humans[current_time])
+        current_sim_obj = new_sim_object
+    end
+    return current_sim_obj
+end
+
+#=
+Run the experiment for Extended Space Planner
+=#
+function run_experiment!(current_sim_obj::NavigationSimulator{VehicleParametersESPlanner}, planner,
+                            pomdp_details::POMPDPlanningDetails, exp_details::ExperimentDetails, output::Output)
     # initialize variables
     current_time_value = 0.0
     current_vehicle_speed = 0.0
@@ -151,10 +277,10 @@ function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, o
     info = nothing
     predicted_vehicle_pos_in_goal = false
     debug = false
-    run_shield = true
+    run_shield = false
     start_time = time()
 
-    try
+    # try
     # Run simulation
     while(!stop_simulation!(current_sim_obj,current_time_value,exp_details,output))
         state_array = [current_sim_obj.vehicle.x, current_sim_obj.vehicle.y, current_sim_obj.vehicle.theta, current_sim_obj.vehicle.v]
@@ -169,7 +295,7 @@ function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, o
             start_time = time()
         end
 
-        time_duration_until_planning_begins = exp_details.one_time_step - (pomdp_details.planning_time + exp_details.buffer_time)
+        time_duration_until_planning_begins = round(exp_details.one_time_step - (pomdp_details.planning_time + exp_details.buffer_time), digits=1)
         current_sim_obj = simulate_vehicle_and_humans!(current_sim_obj, current_vehicle_steering_angle, current_vehicle_speed,
                                                 current_time_value, time_duration_until_planning_begins, exp_details, output)
         current_time_value = round(current_time_value + time_duration_until_planning_begins,digits=1)
@@ -186,13 +312,15 @@ function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, o
         Initialize scenarios with sampled human goals and predicted human positions after (pomdp_planning_time + buffer_time) seconds.
         Solve the POMDP and find the action.
         =#
-        time_duration_until_pomdp_action_determined = pomdp_details.planning_time + exp_details.buffer_time
+        time_duration_until_pomdp_action_determined = round(pomdp_details.planning_time + exp_details.buffer_time, digits=1)
         predicted_vehicle_state = propogate_vehicle(current_sim_obj.vehicle, current_sim_obj.vehicle_params,
                                             current_vehicle_steering_angle, current_vehicle_speed, time_duration_until_pomdp_action_determined)
+        predicted_vehicle_center_x = predicted_vehicle_state.x + current_sim_obj.vehicle_params.dist_origin_to_center*cos(predicted_vehicle_state.theta)
+        predicted_vehicle_center_y = predicted_vehicle_state.y + current_sim_obj.vehicle_params.dist_origin_to_center*sin(predicted_vehicle_state.theta)
         modified_vehicle_params = modify_vehicle_params(current_sim_obj.vehicle_params)
 
         # Check if the predicted vehicle position is in the goal region
-        if(is_within_range(predicted_vehicle_state.x,predicted_vehicle_state.y,current_sim_obj.vehicle_params.goal.x,current_sim_obj.vehicle_params.goal.y,exp_details.radius_around_vehicle_goal))
+        if(is_within_range(predicted_vehicle_center_x,predicted_vehicle_center_y,current_sim_obj.vehicle_params.goal.x,current_sim_obj.vehicle_params.goal.y,exp_details.radius_around_vehicle_goal))
             println("Predicted vehicle state is in goal")
             next_pomdp_action = ActionExtendedSpacePOMDP(0.0,0.0)
             output.nearby_humans[current_time_value] = nbh
@@ -230,7 +358,7 @@ function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, o
             start_time = time()
         end
         # Simulate for (pomdp_planning_time + buffer_time) seconds
-        time_duration_until_next_action_is_applied = pomdp_details.planning_time + exp_details.buffer_time
+        time_duration_until_next_action_is_applied = round(pomdp_details.planning_time + exp_details.buffer_time,digits=1)
         current_sim_obj = simulate_vehicle_and_humans!(current_sim_obj, current_vehicle_steering_angle, current_vehicle_speed,
                                                     current_time_value, time_duration_until_next_action_is_applied, exp_details, output)
 
@@ -274,163 +402,222 @@ function run_experiment!(current_sim_obj, planner, exp_details, pomdp_details, o
         end
     end
 
+    # catch e
+    #     println("\n Things failed during the simulation. \n The error message is : \n ")
+    #     println(e)
+    # end
+    output.time_taken = current_time_value
+end
+
+#=
+Run the experiment for Limited Space Planner
+=#
+function run_experiment!(current_sim_obj::NavigationSimulator{VehicleParametersLSPlanner}, path_planning_details::PathPlanningDetails,
+                                                pomdp_details::POMPDPlanningDetails, exp_details::ExperimentDetails, output::Output)
+    # initialize variables
+    current_time_value = 0.0
+    current_vehicle_speed = 0.0
+    vehicle_delta_angle_actions = get_vehicle_actions(45,5)
+    current_action = ActionLimitedSpacePOMDP(0.0)
+    output.vehicle_actions[current_time_value] = current_action
+    output.sim_objects[current_time_value] = current_sim_obj
+    nbh = NearbyHumans(HumanState[], Int64[], HumanGoalsBelief[])
+    output.nearby_humans[current_time_value] = nbh
+    expected_vehicle_path = get_future_vehicle_trajectory(OrderedDict(current_time_value=>current_sim_obj.vehicle),
+                                                    current_sim_obj.vehicle_params,1,path_planning_details,exp_details)
+    output.vehicle_expected_trajectory[current_time_value] = expected_vehicle_path[current_time_value]
+    modified_vehicle_params = copy(current_sim_obj.vehicle_params)
+    next_action = nothing
+    info = nothing
+    predicted_vehicle_pos_in_goal = false
+    debug = false
+    run_shield = false
+    start_time = time()
+
+    #=
+    Psuedocode
+        while(!stop_condition)
+            1) Print vehicle state, action and current time step
+            2) Find vehicle trajectory using this action for one_time_step seconds
+            3) Simulate humans for (one_time_step - pomdp_planning_time - buffer_time - path_planning_time) seconds
+            4) a) Observe current human positions and their belief
+               b) Predict future vehicle position
+               c) Generate hybrid A* path
+               d) Initialize scenarios
+               e) Feed scenarios and hybrid A* path to the LS planner to get vehicle action
+            5) Simulate humans for (pomdp_planning_time + buffer_time + path_planning_time) seconds
+            6) Run shielding
+            7) Set parameters for next cycle and store/modify required variables
+        end
+    =#
+
+    # Run simulation
+    try
+    while(!stop_simulation!(current_sim_obj,current_time_value,exp_details,output))
+        state_array = [current_sim_obj.vehicle.x, current_sim_obj.vehicle.y, current_sim_obj.vehicle.theta, current_sim_obj.vehicle.v]
+        action_array = [current_sim_obj.vehicle_params.controls_sequence[1], current_action.delta_speed]
+        println("\nTime_k = ", current_time_value,
+              "\t State_k = ", round.(state_array, digits=3),
+              "\t Action_k = ", round.(action_array, digits=3))
+
+        #=
+        Generate vehicle trajectory using current action
+        =#
+        vehicle_trajectory, latest_controls_sequence_index = propogate_vehicle(current_sim_obj.vehicle, current_sim_obj.vehicle_params,current_vehicle_speed,
+                                                            current_time_value, exp_details.one_time_step, path_planning_details, exp_details)
+        vehicle_expected_goal_paths = get_future_vehicle_trajectory(vehicle_trajectory, current_sim_obj.vehicle_params,latest_controls_sequence_index+1,
+                                                            path_planning_details,exp_details)
+
+        #=
+        Simulate for (one_time_step - path_planning_time - pomdp_planning_time - buffer_time) seconds
+        =#
+        if(debug)
+            println("Simulating for one_time_step - path_planning_time - pomdp_planning_time - buffer_time seconds : " ,
+                                exp_details.one_time_step - (path_planning_details.planning_time + pomdp_details.planning_time + exp_details.buffer_time))
+            start_time = time()
+        end
+        time_duration_until_planning_begins = round(exp_details.one_time_step - (path_planning_details.planning_time +
+                                                        pomdp_details.planning_time + exp_details.buffer_time), digits=1)
+        current_sim_obj = simulate_vehicle_and_humans!(current_sim_obj, vehicle_trajectory, vehicle_expected_goal_paths,
+                                                current_time_value, time_duration_until_planning_begins, exp_details, output)
+        current_time_value = round(current_time_value+time_duration_until_planning_begins, digits=1)
+        if(debug)
+            println("Finished simulation")
+            time_taken = time() - start_time
+            println("Time Taken : ", time_taken)
+        end
+
+        #=
+        Planning for the next cycle
+        =#
+        time_duration_until_pomdp_action_determined = round(pomdp_details.planning_time + exp_details.buffer_time, digits=1)
+        predicted_vehicle_state = collect(values(vehicle_trajectory))[end]
+        predicted_vehicle_center_x = predicted_vehicle_state.x + current_sim_obj.vehicle_params.dist_origin_to_center*cos(predicted_vehicle_state.theta)
+        predicted_vehicle_center_y = predicted_vehicle_state.y + current_sim_obj.vehicle_params.dist_origin_to_center*sin(predicted_vehicle_state.theta)
+        # Check if the predicted vehicle position is in the goal region
+        if(is_within_range(predicted_vehicle_center_x,predicted_vehicle_center_y,current_sim_obj.vehicle_params.goal.x,current_sim_obj.vehicle_params.goal.y,exp_details.radius_around_vehicle_goal))
+            println("Predicted vehicle state is in goal")
+            next_pomdp_action = ActionLimitedSpacePOMDP(0.0)
+            output.nearby_humans[current_time_value] = nbh
+            output.b_root[current_time_value] = nothing
+            output.despot_trees[current_time_value] = nothing
+            predicted_vehicle_pos_in_goal = true
+        # If it is not, then take observation from the environment and plan for the next action
+        else
+            nbh = get_nearby_humans(current_sim_obj,pomdp_details.num_nearby_humans,pomdp_details.min_safe_distance_from_human,
+                                                    pomdp_details.cone_half_angle)
+            if(debug)
+                println("Starting Hybrid A* path planning")
+                start_time = time()
+            end
+            vehicle_steering_controls = hybrid_astar_search(current_sim_obj.env, predicted_vehicle_state, current_sim_obj.vehicle_params,
+                                                    vehicle_delta_angle_actions, nbh, path_planning_details)
+            if(debug)
+                println("Finished Hybrid A* path planning")
+                time_taken = time() - start_time
+                println("Time Taken : ", time_taken)
+            end
+
+            if(length(vehicle_steering_controls) == 0)
+                println("Hybrid A* path not found within the given time limit. Reusing old path")
+                #Modify the steering_controls_sequence to reuse the old path
+                modified_vehicle_params = modify_vehicle_params(current_sim_obj.vehicle_params, current_vehicle_speed, path_planning_details.veh_path_planning_v)
+            else
+                #Modify vehicle params
+                modified_vehicle_params = modify_vehicle_params(current_sim_obj.vehicle_params, vehicle_steering_controls)
+            end
+
+            if(debug)
+                println("Starting POMDP planning")
+                start_time = time()
+            end
+            b = TreeSearchScenarioParameters(predicted_vehicle_state.x,predicted_vehicle_state.y,predicted_vehicle_state.theta,predicted_vehicle_state.v,
+                                modified_vehicle_params, exp_details.human_goal_locations, length(nbh.position_data), nbh.position_data, nbh.belief,
+                                current_sim_obj.env.length,current_sim_obj.env.breadth,time_duration_until_pomdp_action_determined)
+            output.nearby_humans[current_time_value] = nbh
+            output.b_root[current_time_value] = b
+
+            #=
+            Define POMDP, POMDP Solver and POMDP Planner
+            =#
+            rollout_guide = HybridAStarPolicy(modified_vehicle_params.controls_sequence,length(modified_vehicle_params.controls_sequence))
+            planning_pomdp = LimitedSpacePOMDP(pomdp_details,current_sim_obj.env,modified_vehicle_params,rollout_guide)
+            pomdp_solver = DESPOTSolver(bounds=IndependentBounds(DefaultPolicyLB(FunctionPolicy(b->calculate_lower_bound(planning_pomdp, b)),max_depth=pomdp_details.tree_search_max_depth),
+                                calculate_upper_bound,check_terminal=true,consistency_fix_thresh=1e-5),K=pomdp_details.num_scenarios,D=pomdp_details.tree_search_max_depth,
+                                T_max=pomdp_details.planning_time,tree_in_info=true)
+            planner = POMDPs.solve(pomdp_solver, planning_pomdp);
+
+            # Run DESPOT to calculate next action
+            # next_pomdp_action = ActionLimitedSpacePOMDP(0.0)
+            next_pomdp_action, info = action_info(planner, b)
+            if(debug)
+                println("Finished POMDP planning. Action selected")
+                time_taken = time() - start_time
+                println("Time Taken : ", time_taken)
+            end
+            output.despot_trees[current_time_value] = info
+        end
+
+        #=
+        Simulate for (path_planning_time + pomdp_planning_time + buffer_time) seconds
+        =#
+        if(debug)
+            println("Simulating for path_planning_time + pomdp_planning_time + buffer_time seconds : " , path_planning_details.planning_time + pomdp_details.planning_time + exp_details.buffer_time)
+            start_time = time()
+        end
+        time_duration_until_next_action_is_applied = round(path_planning_details.planning_time + pomdp_details.planning_time + exp_details.buffer_time, digits=1)
+        current_sim_obj = simulate_vehicle_and_humans!(current_sim_obj, vehicle_trajectory, vehicle_expected_goal_paths,
+                                                current_time_value, time_duration_until_next_action_is_applied, exp_details, output)
+        if(debug)
+            println("Finished simulation")
+            time_taken = time() - start_time
+            println("Time Taken : ", time_taken)
+        end
+
+        #=
+        Shielding
+        =#
+        if(run_shield)
+            println("POMDP requested action = ", [next_pomdp_action.steering_angle, next_pomdp_action.delta_speed])
+            shielding_nbh = get_nearby_humans(current_sim_obj,pomdp_details.num_nearby_humans,pomdp_details.min_safe_distance_from_human,
+                                                    pomdp_details.cone_half_angle)
+            Dt_obs_to_k1 = 0.0
+            # Check if the predicted vehicle position is in the goal region
+            if(predicted_vehicle_pos_in_goal)
+                next_action = next_pomdp_action
+            # checks if tree is empty (root node took default action)
+            elseif length(info[:tree].children[1]) == 0
+                next_action = next_pomdp_action
+            # else, runs shield and returns best safe action
+            else
+                next_action = get_best_shielded_action(predicted_vehicle_state, shielding_nbh.position_data, Dt_obs_to_k1, exp_details.one_time_step,
+                    shield_get_actions, veh_body, exp_details.human_goal_locations, planner.pomdp, info[:tree], exp_details.user_defined_rng)
+            end
+        else
+            next_action = next_pomdp_action
+        end
+
+        #=
+        Set parameters for the next cycle
+        =#
+        current_action = next_action
+        current_vehicle_speed = clamp((current_vehicle_speed + current_action.delta_speed), 0.0, pomdp_details.max_vehicle_speed)
+        current_time_value = round(current_time_value+time_duration_until_next_action_is_applied,digits=1)
+        current_sim_obj = copy(current_sim_obj,modified_vehicle_params)
+        output.sim_objects[current_time_value] = current_sim_obj
+
+        #=
+        Store relevant values in exp_details
+        =#
+        output.vehicle_actions[current_time_value] = current_action
+        if(current_action.delta_speed == -10.0)
+            output.number_sudden_stops += 1
+        end
+    end
+
     catch e
         println("\n Things failed during the simulation. \n The error message is : \n ")
         println(e)
     end
     output.time_taken = current_time_value
-end
-
-
-#Functions for simulating the cart and pedestrians for the 1D planner
-
-#Returns the updated belief over humans and number of risks encountered
-function hybrid_astar_1D_pomdp_simulate_pedestrians_and_generate_gif_environments_when_cart_stationary(env_right_now, current_belief,
-                                                                        all_gif_environments, all_risky_scenarios, time_stamp,
-                                                                        num_humans_to_care_about_while_pomdp_planning, cone_half_angle,
-                                                                        lidar_range, closest_ped_dist_threshold, user_defined_rng)
-
-    number_risks = 0
-    env_before_humans_and_cart_simulated_for_first_half_second = deepcopy(env_right_now)
-
-    #Simulate for 0 to 0.5 seconds
-    for i in 1:5
-        env_right_now.humans = move_human_for_one_time_step_in_actual_environment(env_right_now,0.1,user_defined_rng)
-        env_right_now.complete_cart_lidar_data = get_lidar_data(env_right_now,lidar_range)
-        env_right_now.cart_lidar_data = get_nearest_n_pedestrians_in_cone_pomdp_planning_1D_or_2D_action_space(env_right_now.cart,
-                                                            env_right_now.complete_cart_lidar_data, num_humans_to_care_about_while_pomdp_planning,
-                                                            closest_ped_dist_threshold, cone_half_angle)
-        dict_key = "t="*string(time_stamp)*"_"*string(i)
-        all_gif_environments[dict_key] =  deepcopy(env_right_now)
-        if(get_count_number_of_risks(env_right_now) != 0)
-            number_risks += get_count_number_of_risks(env_right_now)
-            all_risky_scenarios[dict_key] =  deepcopy(env_right_now)
-        end
-    end
-
-    #Update your belief after first 0.5 seconds
-    updated_belief = update_belief_from_old_world_and_new_world(current_belief,
-                                                    env_before_humans_and_cart_simulated_for_first_half_second, env_right_now)
-
-    #Simulate for 0.5 to 1 second
-    env_before_humans_and_cart_simulated_for_second_half_second = deepcopy(env_right_now)
-    for i in 6:10
-        env_right_now.humans = move_human_for_one_time_step_in_actual_environment(env_right_now,0.1,user_defined_rng)
-        if(i==10)
-            respawn_humans(env_right_now, user_defined_rng)
-        end
-        env_right_now.complete_cart_lidar_data = get_lidar_data(env_right_now,lidar_range)
-        env_right_now.cart_lidar_data = get_nearest_n_pedestrians_in_cone_pomdp_planning_1D_or_2D_action_space(env_right_now.cart,
-                                                            env_right_now.complete_cart_lidar_data, num_humans_to_care_about_while_pomdp_planning,
-                                                            closest_ped_dist_threshold, cone_half_angle)
-        dict_key = "t="*string(time_stamp)*"_"*string(i)
-        all_gif_environments[dict_key] =  deepcopy(env_right_now)
-        if(get_count_number_of_risks(env_right_now) != 0)
-            number_risks += get_count_number_of_risks(env_right_now)
-            all_risky_scenarios[dict_key] =  deepcopy(env_right_now)
-        end
-    end
-
-    #Update your belief after second 0.5 seconds
-    final_updated_belief = update_belief_from_old_world_and_new_world(updated_belief,
-                                                    env_before_humans_and_cart_simulated_for_second_half_second, env_right_now)
-
-    return final_updated_belief, number_risks
-end
-
-#Returns the updated belief over humans and number of risks encountered
-function hybrid_astar_1D_pomdp_simulate_cart_and_pedestrians_and_generate_gif_environments_when_cart_moving(env_right_now, current_belief,
-                                                            all_gif_environments, all_risky_scenarios, time_stamp,
-                                                            num_humans_to_care_about_while_pomdp_planning, cone_half_angle,
-                                                            lidar_range, closest_ped_dist_threshold, user_defined_rng)
-
-    #First simulate only the cart and get its path
-    goal_reached_in_this_time_step_flag = false
-    if(env_right_now.cart.v > length(env_right_now.cart_hybrid_astar_path))
-        steering_angles = env_right_now.cart_hybrid_astar_path
-        goal_reached_in_this_time_step_flag = true
-    else
-        steering_angles = env_right_now.cart_hybrid_astar_path[1:Int(env_right_now.cart.v)]
-    end
-    cart_path_x = Float64[]; cart_path_y = Float64[]; cart_path_theta = Float64[]
-    initial_state = [env_right_now.cart.x,env_right_now.cart.y,env_right_now.cart.theta]
-    for i in 1:length(steering_angles)
-        steering_angle = steering_angles[i]
-        extra_parameters = [env_right_now.cart.v, env_right_now.cart.L, steering_angle]
-        x,y,theta = get_intermediate_points(initial_state, 1.0/env_right_now.cart.v, extra_parameters, 0.1/env_right_now.cart.v )
-        append!(cart_path_x, x[2:end])
-        append!(cart_path_y, y[2:end])
-        append!(cart_path_theta, theta[2:end])
-        initial_state = [last(cart_path_x),last(cart_path_y),last(cart_path_theta)]
-    end
-
-    number_risks = 0
-
-    #Simulate for 0 to 0.5 seconds
-    env_before_humans_and_cart_simulated_for_first_half_second = deepcopy(env_right_now)
-    initial_state = [env_right_now.cart.x,env_right_now.cart.y,env_right_now.cart.theta]
-    curr_hybrid_astar_path_index = 0
-
-    for i in 1:5
-        cart_path_index = clamp(Int(i*env_right_now.cart.v),1,10*length(steering_angles))
-        env_right_now.cart.x, env_right_now.cart.y, env_right_now.cart.theta = cart_path_x[cart_path_index], cart_path_y[cart_path_index], cart_path_theta[cart_path_index]
-        env_right_now.humans = move_human_for_one_time_step_in_actual_environment(env_right_now,0.1,user_defined_rng)
-        env_right_now.complete_cart_lidar_data = get_lidar_data(env_right_now,lidar_range)
-        env_right_now.cart_lidar_data = get_nearest_n_pedestrians_in_cone_pomdp_planning_1D_or_2D_action_space(env_right_now.cart,
-                                                            env_right_now.complete_cart_lidar_data, num_humans_to_care_about_while_pomdp_planning,
-                                                            closest_ped_dist_threshold, cone_half_angle)
-        if( floor( (0.1*i) / (1/env_right_now.cart.v) ) > curr_hybrid_astar_path_index)
-            curr_hybrid_astar_path_index += 1
-            env_right_now.cart_hybrid_astar_path = env_right_now.cart_hybrid_astar_path[2 : end]
-        end
-        dict_key = "t="*string(time_stamp)*"_"*string(i)
-        all_gif_environments[dict_key] =  deepcopy(env_right_now)
-        if(get_count_number_of_risks(env_right_now) != 0)
-            number_risks += get_count_number_of_risks(env_right_now)
-            all_risky_scenarios[dict_key] =  deepcopy(env_right_now)
-        end
-        initial_state = [env_right_now.cart.x,env_right_now.cart.y,env_right_now.cart.theta]
-    end
-
-    #Update your belief after first 0.5 seconds
-    updated_belief = update_belief_from_old_world_and_new_world(current_belief,
-                                                    env_before_humans_and_cart_simulated_for_first_half_second, env_right_now)
-
-    #Simulate for 0.5 to 1 second
-    env_before_humans_and_cart_simulated_for_second_half_second = deepcopy(env_right_now)
-    initial_state = [env_right_now.cart.x,env_right_now.cart.y,env_right_now.cart.theta]
-    for i in 6:10
-        cart_path_index = clamp(Int(i*env_right_now.cart.v),1,10*length(steering_angles))
-        env_right_now.cart.x, env_right_now.cart.y, env_right_now.cart.theta = cart_path_x[cart_path_index], cart_path_y[cart_path_index], cart_path_theta[cart_path_index]
-        env_right_now.humans = move_human_for_one_time_step_in_actual_environment(env_right_now,0.1,user_defined_rng)
-        if(i==10)
-            respawn_humans(env_right_now, user_defined_rng)
-        end
-        env_right_now.complete_cart_lidar_data = get_lidar_data(env_right_now,lidar_range)
-        env_right_now.cart_lidar_data = get_nearest_n_pedestrians_in_cone_pomdp_planning_1D_or_2D_action_space(env_right_now.cart,
-                                                            env_right_now.complete_cart_lidar_data, num_humans_to_care_about_while_pomdp_planning,
-                                                            closest_ped_dist_threshold, cone_half_angle)
-        if( floor( (0.1*i) / (1/env_right_now.cart.v) ) > curr_hybrid_astar_path_index)
-            curr_hybrid_astar_path_index += 1
-            env_right_now.cart_hybrid_astar_path = env_right_now.cart_hybrid_astar_path[2 : end]
-        end
-        dict_key = "t="*string(time_stamp)*"_"*string(i)
-        all_gif_environments[dict_key] =  deepcopy(env_right_now)
-        if(get_count_number_of_risks(env_right_now) != 0)
-            number_risks += get_count_number_of_risks(env_right_now)
-            all_risky_scenarios[dict_key] =  deepcopy(env_right_now)
-        end
-        initial_state = [env_right_now.cart.x,env_right_now.cart.y,env_right_now.cart.theta]
-    end
-
-    #Update your belief after second 0.5 seconds
-    final_updated_belief = update_belief_from_old_world_and_new_world(updated_belief,
-                                                    env_before_humans_and_cart_simulated_for_second_half_second, env_right_now)
-
-    # if(goal_reached_in_this_time_step_flag)
-    #     env_right_now.cart_hybrid_astar_path = []
-    # else
-    #     env_right_now.cart_hybrid_astar_path = env_right_now.cart_hybrid_astar_path[Int(env_right_now.cart.v)+1:end]
-    # end
-    return final_updated_belief, number_risks
 end

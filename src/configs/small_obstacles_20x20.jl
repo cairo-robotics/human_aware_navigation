@@ -1,10 +1,10 @@
 small_obstacles_20x20 =  InputParameters(
-    MersenneTwister(), #=rng::AbstractRNG=#
+    MersenneTwister(230), #=rng::AbstractRNG=#
     20.0, #=env_length::Float64=#
     20.0, #=env_breadth::Float64=#
     ObstacleLocation[ObstacleLocation(5.125,4.875,1.125), ObstacleLocation(6.5,15.25,1.5),
                         ObstacleLocation(16.25,11.0,1.125), ObstacleLocation(10.0,9.5,2.25) ], #=obstacles::Array{obstacle_location,1}=#
-    20, #=num_humans::Int64=#
+    25, #=num_humans::Int64=#
     1.0, #=human_start_v::Float64=#
     10.0, #=veh_start_x::Float64=#
     2.0, #=veh_start_y::Float64=#
@@ -34,9 +34,10 @@ small_obstacles_20x20 =  InputParameters(
     1.0, #=observation_discretization_length::Float64=#
     100, #=tree_search_max_depth::Int64=#
     100, #=num_scenarios::Int64=#
-    4.0, #=d_near::Float64 = 0.5=#
-    6.0, #=d_far::Float64 = 0.5=#
-    0.3, #=pomdp_planning_time::Float64=#
+    2.0, #=d_near::Float64 = 0.5=#
+    4.0, #=d_far::Float64 = 0.5=#
+    0.4, #=es_pomdp_planning_time::Float64=#
+    0.3, #=ls_pomdp_planning_time::Float64=#
     pi/4, #=pomdp_action_max_delta_heading_angle::Float64=#
     0.5, #=pomdp_action_delta_speed::Float64=#
     0.5, #=one_time_step::Float64=#

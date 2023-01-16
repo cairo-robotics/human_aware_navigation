@@ -99,7 +99,8 @@ function Base.rand(rng::AbstractRNG, scenario_params::TreeSearchScenarioParamete
     for i in 1:scenario_params.num_nearby_humans
         sampled_goal = Distributions.rand(rng, SparseCat(scenario_params.human_goals,scenario_params.nearby_humans_belief[i].pdf))
         new_human = HumanState(scenario_params.nearby_humans[i].x,scenario_params.nearby_humans[i].y,scenario_params.nearby_humans[i].v,sampled_goal)
-        new_human = update_human_position(new_human,scenario_params.world_length,scenario_params.world_breadth,scenario_params.time_duration,0.0)
+        noise = (rand(rng) - 0.5)*new_human.v*scenario_params.time_duration*0.2
+        new_human = update_human_position(new_human,scenario_params.world_length,scenario_params.world_breadth,scenario_params.time_duration,noise)
         push!(humans, new_human)
     end
     return StateExtendedSpacePOMDP(scenario_params.vehicle_x,scenario_params.vehicle_y,scenario_params.vehicle_theta,scenario_params.vehicle_v,humans)
@@ -201,8 +202,6 @@ function POMDPs.gen(m::ExtendedSpacePOMDP, s, a, rng)
     #     return (sp=sp, o=observed_positions, r=r)
     # end
 
-    # x = [s.vehicle_x,s.vehicle_y,s.vehicle_theta,s.vehicle_v]
-    # println(x)
     vehicle_center_x = s.vehicle_x + m.vehicle_D*cos(s.vehicle_theta)
     vehicle_center_y = s.vehicle_y + m.vehicle_D*sin(s.vehicle_theta)
 
@@ -213,7 +212,6 @@ function POMDPs.gen(m::ExtendedSpacePOMDP, s, a, rng)
                 # println("Vehicle's position is " ,vehicle_path[time_index] , "\nHuman's position is ", intermediate_human_location )
                 new_vehicle_position = (-100.0, -100.0, -100.0)
                 collision_with_human = true
-                # next_human_states = human_state[]
                 observed_positions = Location[ Location(-50.0,-50.0) ]
                 sp = StateExtendedSpacePOMDP(new_vehicle_position[1],new_vehicle_position[2],new_vehicle_position[3],s.vehicle_v,next_human_states)
                 r = human_collision_penalty(collision_with_human, m.human_collision_penalty)
@@ -227,7 +225,6 @@ function POMDPs.gen(m::ExtendedSpacePOMDP, s, a, rng)
             # println("Collision with this obstacle " ,obstacle)
             new_vehicle_position = (-100.0, -100.0, -100.0)
             collision_with_obstacle = true
-            # next_human_states = human_state[]
             observed_positions = Location[ Location(-50.0,-50.0) ]
             sp = StateExtendedSpacePOMDP(new_vehicle_position[1],new_vehicle_position[2],new_vehicle_position[3],s.vehicle_v,next_human_states)
             r = obstacle_collision_penalty(collision_with_obstacle, m.obstacle_collision_penalty)
@@ -239,7 +236,6 @@ function POMDPs.gen(m::ExtendedSpacePOMDP, s, a, rng)
         # println("Running into boundary wall")
         new_vehicle_position = (-100.0, -100.0, -100.0)
         collision_with_obstacle = true
-        # next_human_states = human_state[]
         observed_positions = Location[ Location(-50.0,-50.0) ]
         sp = StateExtendedSpacePOMDP(new_vehicle_position[1],new_vehicle_position[2],new_vehicle_position[3],s.vehicle_v,next_human_states)
         r = obstacle_collision_penalty(collision_with_obstacle, m.obstacle_collision_penalty)
@@ -269,7 +265,7 @@ function POMDPs.gen(m::ExtendedSpacePOMDP, s, a, rng)
     new_vehicle_position = vehicle_path[end]
 
     for human in s.nearby_humans
-        scaling_factor_for_noise = 0.0
+        scaling_factor_for_noise = 0.2
         noise = (rand(rng) - 0.5)*human.v*m.one_time_step*scaling_factor_for_noise
         modified_human_state = update_human_position(human,m.world.length,m.world.breadth,m.one_time_step,noise)
         if(new_vehicle_speed!=0.0)
@@ -356,7 +352,7 @@ function POMDPs.gen(m::ExtendedSpacePOMDP, s, a, rng)
     r += immediate_stop_penalty(immediate_stop, m.human_collision_penalty)
     #println("Reward if you had to apply immediate brakes", r)
     #Penalize if vehicle's heading angle changes
-    # r += heading_angle_change_penalty(a.steering_angle)
+    r += heading_angle_change_penalty(a.steering_angle)
     #Penalty to avoid long paths
     r += -1.0
 
@@ -795,8 +791,8 @@ function get_actions(m::ExtendedSpacePOMDP{HJBPolicy},b)
                 ActionExtendedSpacePOMDP(steering_angle,0.0),
                 ActionExtendedSpacePOMDP(rollout_action[1],rollout_action[2]),
                 ActionExtendedSpacePOMDP(steering_angle,-delta_speed),
-                ActionExtendedSpacePOMDP(-steering_angle,-delta_speed)
-                # ActionExtendedSpacePOMDP(-10.0,-10.0)
+                ActionExtendedSpacePOMDP(-steering_angle,-delta_speed),
+                ActionExtendedSpacePOMDP(-10.0,-10.0)
                 ]
     else
         steering_angle = clamp(get_steering_angle(m.vehicle_wheelbase,max_delta_angle,pomdp_state.vehicle_v,m.one_time_step),0.0,max_steering_angle)
@@ -814,8 +810,8 @@ function get_actions(m::ExtendedSpacePOMDP{HJBPolicy},b)
                 ActionExtendedSpacePOMDP(steering_angle,0.0),
                 ActionExtendedSpacePOMDP(rollout_action[1],rollout_action[2]),
                 ActionExtendedSpacePOMDP(steering_angle,-delta_speed),
-                ActionExtendedSpacePOMDP(-steering_angle,-delta_speed)
-                # ActionExtendedSpacePOMDP(-10.0,-10.0)
+                ActionExtendedSpacePOMDP(-steering_angle,-delta_speed),
+                ActionExtendedSpacePOMDP(-10.0,-10.0)
                 ]
     end
 end

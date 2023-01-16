@@ -1,12 +1,29 @@
 using Plots
 using UnicodePlots
 using D3Trees
+using LazySets
 
 #Function to display a circle
 function circleShape(h,k,r)
     theta = LinRange(0,2*pi,100)
     h .+ r*sin.(theta), k .+ r*cos.(theta)
 end
+
+function rectangleShape(x,y,width,height)
+    s = Shape(x .+ [0,width,width,0], y.+ [0,0,height,height])
+    return s
+end
+
+function get_vehicle_shape(vehicle,vehicle_body_origin)
+    #First rotate the vehicle to align with vehicle's current theta
+    rotation_matrix = [cos(vehicle.theta) -sin(vehicle.theta); sin(vehicle.theta) cos(vehicle.theta) ]
+    vehicle_shape = linear_map(rotation_matrix,vehicle_body_origin)
+
+    #Translate vehicle body to its current x and y coordinates
+    LazySets.translate!(vehicle_shape,[vehicle.x,vehicle.y])
+    return vehicle_shape
+end
+
 
 function get_plot(env,vehicle,vehicle_params,humans,humans_params,sensor_data,nearby_humans,time_value,exp_details)
 
@@ -101,132 +118,121 @@ display(p)
 =#
 
 
-function get_plot_will_version(env, vehicle, vehicle_params, nearby_humans, sensor_data, time_value, exp_details, x_subpath)
-    # NOTE: hard-coding vehicle body in for now, didn't want to modify observe() arguments
-    wheelbase = 0.75
-    body_dims = [1.0, 0.5]
-    origin_to_cent = [0.375, 0.0]
-    veh = define_vehicle(wheelbase, body_dims, origin_to_cent, 0.0, 0.0)
+function get_plot(env, vehicle, vehicle_body, vehicle_params, nearby_humans, sensor_data, time_value, exp_details, vehicle_traj)
 
-    p_sim = plot(aspect_ratio=:equal,
-        size=(800,800), dpi=300,
+    snapshot = plot(aspect_ratio=:equal,size=(800,800), dpi=300,
+        # axis=([], false)
         xticks=0:4:20, yticks=0:4:20,
-        xlabel="x-axis [m]", ylabel="y-axis [m]",
+        # xlabel="x-axis [m]", ylabel="y-axis [m]",
         # legend=:bottom,
-        legend=false)
+        # legend=false
+        )
 
-    # workspace
-    plot!(p_sim, [0.0, env.length], [0.0,0.0], linecolor=:black, linewidth=2, label="")
-    plot!(p_sim, [env.length, env.length], [0.0,env.breadth], linecolor=:black, linewidth=2, label="")
-    plot!(p_sim, [0.0, env.length], [env.breadth,env.breadth], linecolor=:black, linewidth=2, label="")
-    plot!(p_sim, [0.0, 0.0], [0.0,env.breadth], linecolor=:black, linewidth=2, label="")
+    #Plot Workspace
+    turf_color = :green
+    # plot!(snapshot, [0.0, env.length], [0.0,0.0], linecolor=boundary_color, linewidth=0.5, label="")
+    # plot!(snapshot, [env.length, env.length], [0.0,env.breadth], linecolor=boundary_color, linewidth=0.5, label="")
+    # plot!(snapshot, [0.0, env.length], [env.breadth,env.breadth], linecolor=boundary_color, linewidth=0.5, label="")
+    # plot!(snapshot, [0.0, 0.0], [0.0,env.breadth], linecolor=boundary_color, linewidth=0.5, label="")
+    plot!(snapshot, rectangleShape(0.0,0.0,env.length,env.breadth),opacity=0.1,color=turf_color,linewidth=2.0,linecolor=:black,label="")
 
-    # external anchors
-    anchor_dist = 0.55
-    scatter!(p_sim,
+
+    #Plot External Anchors
+    anchor_dist = 0.5
+    scatter!(snapshot,
         [0.0 - anchor_dist, env.length + anchor_dist, env.length + anchor_dist, 0.0 - anchor_dist],
         [0.0 - anchor_dist, 0.0 - anchor_dist, env.breadth + anchor_dist, env.breadth + anchor_dist],
-        markeralpha=0.0, linealpha=0.0, fillalpha=0.0,
-        label="")
+        markeralpha=0.0, fillalpha=0.0, label="")
 
-    # vehicle goal
-    plot!(p_sim, circleShape(vehicle_params.goal.x, vehicle_params.goal.y, exp_details.radius_around_vehicle_goal),
-        color=:green, fillalpha=0.125,
-        linecolor=:green, linewidth=2.0,
-        label="Vehicle Goal", seriestype = [:shape,])
+    #Plot Obstacles
+    obstacle_color = :black
+    for obs in env.obstacles
+        plot!(snapshot, circleShape(obs.x,obs.y,obs.r), color=obstacle_color, linewidth=2.0, linecolor = obstacle_color,
+            legend=false, fillalpha=0.4, aspect_ratio=1, label="", seriestype = [:shape,])
+        Plots.annotate!(snapshot,obs.x, obs.y, text("Obs", obstacle_color, :center, 10))
+        # scatter!([obs.x],[obs.y],color="black",shape=:circle,msize=plot_size*obs.r/env.length)
+    end
 
-    # human goals
+
+    #Plot Human Goals
     human_goals = get_human_goals(env)
-    offset = 0.625
+    offset = 0.125 * 0
+    human_goal_color = :green
     for i in 1:length(human_goals)
         goal_name = "G"*string(i)
-
-        human_goals[i].x > 1/2*env.length ? x_dir = -1 : x_dir = 1
-        human_goals[i].y > 1/2*env.breadth ? y_dir = -1 : y_dir = 1
-
-        Plots.annotate!(human_goals[i].x + x_dir*offset, human_goals[i].y + y_dir*offset,
-            text(goal_name, :black, :center, 15))
+        human_goals[i].x > 1/2*env.length ? x_dir = 1 : x_dir = -1
+        human_goals[i].y > 1/2*env.breadth ? y_dir = 1 : y_dir = -1
+        Plots.annotate!(human_goals[i].x + x_dir*offset, human_goals[i].y + y_dir*offset, text(goal_name, :black, :center, 10))
+        plot!(snapshot, circleShape(human_goals[i].x + x_dir*offset,human_goals[i].y + y_dir*offset,exp_details.max_risk_distance),
+                    color=human_goal_color, linewidth=2.0, linecolor = :black, fillalpha=0.2, aspect_ratio=1, label="", seriestype = [:shape,])
     end
 
-    # obstacles
-    for obs_index in 1:length(env.obstacles)
-        obs = env.obstacles[obs_index]
-
-        obs_index == 1 ? lbl = "Obstacle" : lbl = ""
-
-        plot!(p_sim, circleShape(obs.x, obs.y, obs.r),
-            color=:red, fillalpha=0.125,
-            linecolor=:red, linewidth=2.0,
-            label=lbl, seriestype = [:shape,])
-    end
-
-    # vehicle path
-    linez_clim = 2.5
-    linez_velocity = zeros(length(x_subpath))
-    for kk in 1:(length(x_subpath)-1)
-        linez_velocity[kk] = x_subpath[kk+1][4]
-    end
-
-    plot!(p_sim, getindex.(x_subpath, 1), getindex.(x_subpath, 2),
-        linez=linez_velocity, clim=(0,linez_clim), colorbar_title="Velocity [m/s]",
-        linewidth=2,
-        label="")
-
-    # vehicle body
-    x = [vehicle.x, vehicle.y, vehicle.theta, vehicle.v]
-    scatter!(p_sim, [x[1]], [x[2]],
-        markershape=:circle, markersize=3, markerstrokewidth=0, markercolor=:black,
-        label="")
-
-    veh_body = state_to_body(x, veh)
-    plot!(p_sim, veh_body,
-        color=:black, alpha=0.125,
-        linecolor=:black, linewidth=2.0, linealpha=1.0,
-        label="Vehicle")
-
-    # humans
-    first_near_flag = true
-    first_far_flag = true
-
+    #Plot Humans
+    nearby_human_color = :red
+    faraway_human_color = :cyan
     for i in 1:length(sensor_data.lidar_data)
         human = sensor_data.lidar_data[i]
         human_id = sensor_data.ids[i]
-        is_nearby_human = !(length(findall(x->x==human_id, nearby_humans.ids)) == 0)
         human_reached_goal = (human.x == human.goal.x) && (human.y == human.goal.y)
-
+        if(human_reached_goal)
+            continue
+        end
+        is_nearby_human = !(length(findall(x->x==human_id, nearby_humans.ids)) == 0)
         if(is_nearby_human)
-            first_near_flag == true ? lbl = "Nearby Human" : lbl = ""
-            first_near_flag = false
-
-            scatter!(p_sim, [human.x], [human.y], color=:purple, label=lbl)
-            plot!(p_sim, circleShape(human.x, human.y, exp_details.max_risk_distance),
-                color=:purple, fillalpha=0.125,
-                linecolor=:purple, linewidth=2.0,
-                label="", seriestype = [:shape,])
-
-        elseif(!human_reached_goal)
-            first_far_flag == true ? lbl = "Far Human" : lbl = ""
-            first_far_flag = false
-
-            scatter!(p_sim, [human.x], [human.y], color=:grey, label=lbl)
-            plot!(p_sim, circleShape(human.x, human.y, exp_details.max_risk_distance),
-                color=:grey, fillalpha=0.125,
-                linecolor=:grey, linewidth=2.0,
-                label="", seriestype = [:shape,])
+            # scatter!(snapshot, [human.x], [human.y], color=nearby_human_color, label="")
+            plot!(snapshot, circleShape(human.x, human.y, exp_details.max_risk_distance),color=nearby_human_color,
+                        fillalpha=0.2, linecolor=:black, linewidth=2.0, label="", seriestype = [:shape,])
+            # Plots.annotate!(human.x, human.y, text(string(human_id), :purple, :center, 15))
+            Plots.annotate!(human.x, human.y, text("H",nearby_human_color, :center, :black, 10))
+            continue
+        end
+        is_sensor_data_human = !(length(findall(x->x==human_id, sensor_data.ids)) == 0)
+        if(is_sensor_data_human)
+            # scatter!(snapshot, [human.x], [human.y], color=faraway_human_color, label="")
+            plot!(snapshot, circleShape(human.x, human.y, exp_details.max_risk_distance),color=faraway_human_color,
+                fillalpha=0.2,linecolor=:black, linewidth=2.0, label="", seriestype = [:shape,])
+            Plots.annotate!(human.x, human.y, text("H", faraway_human_color , :center, :black, 10))
+            continue
         end
     end
 
+    #Plot Vehicle Goal
+    vehicle_goal_color = :yellow
+    Plots.annotate!(snapshot,vehicle_params.goal.x, vehicle_params.goal.y, text("G", :darkgreen, :center, 10))
+    plot!(snapshot, circleShape(vehicle_params.goal.x, vehicle_params.goal.y, exp_details.radius_around_vehicle_goal),
+        color=vehicle_goal_color, fillalpha=0.2, linecolor=:black, linewidth=2.0, label="", seriestype = [:shape,])
+
+    #Plot Vehicle
+    scatter!(snapshot, [vehicle.x], [vehicle.y],markershape=:circle, markersize=3, markerstrokewidth=0, markercolor=:black,label="")
+    vehicle_shape = get_vehicle_shape(vehicle,vehicle_body)
+    plot!(snapshot, vehicle_shape,color=:black, alpha=0.125, linecolor=:black, linewidth=2.0, linealpha=1.0,label="Vehicle")
+    vehicle_center_x = vehicle.x + vehicle_params.dist_origin_to_center*cos(vehicle.theta)
+    vehicle_center_y = vehicle.y + vehicle_params.dist_origin_to_center*sin(vehicle.theta)
+    plot!(circleShape(vehicle_center_x,vehicle_center_y,vehicle_params.radius), linewidth=0.5, linecolor = :black,
+                            legend=false, fillalpha=0.2, aspect_ratio=1,c= :grey, seriestype = [:shape,])
+
+    #Plot vehicle's executed trajectory
+    velocity_lim = vehicle_params.max_speed + 0.5
+    vehicle_velocity_list = zeros(length(vehicle_traj))
+    for i in 1:(length(vehicle_traj)-1)
+        vehicle_velocity_list[i] = vehicle_traj[i+1].v
+    end
+    vehicle_traj_x_path = getfield.(vehicle_traj, :x)
+    vehicle_traj_y_path = getfield.(vehicle_traj, :y)
+    plot!(snapshot, vehicle_traj_x_path, vehicle_traj_y_path,
+        linez=vehicle_velocity_list, clim=(0,velocity_lim), colorbar_title="Velocity [m/s]",
+        linewidth=2,label="")
+
     # annotate time value
     t_round = round(time_value, digits=1)
-    Plots.annotate!(p_sim, 0.403*env.length, env.breadth+0.5, text("t = $t_round sec", :black, :left, 14))
+    Plots.annotate!(snapshot, 0.5*env.length, env.breadth+0.5, text("t = $t_round sec", :black, :center, 14))
 
-    return p_sim
+    return snapshot
 end
 
 
-
 #Function to display the environment, vehicle and humans
-function observe(output,path_planning_details,exp_details,time_value, x_subpath)
+function observe(output,exp_details,time_value,veh_body_origin,vehicle_executed_trajectory)
     e = output.sim_objects[time_value].env
     v = output.sim_objects[time_value].vehicle
     vp = output.sim_objects[time_value].vehicle_params
@@ -234,17 +240,15 @@ function observe(output,path_planning_details,exp_details,time_value, x_subpath)
     hp = output.sim_objects[time_value].humans_params
     sd = output.sim_objects[time_value].vehicle_sensor_data
     nbh = output.nearby_humans[time_value]
+    push!(vehicle_executed_trajectory, v)
 
-    x_k = [v.x, v.y, wrap_between_negative_pi_to_pi(v.theta), v.v]
-    push!(x_subpath, x_k)
+    p = get_plot(e, v, veh_body_origin, vp, nbh, sd, time_value, exp_details, vehicle_executed_trajectory)
+    # p = get_plot(e,v,vp,h,hp,sd,nbh,time_value,exp_details)
 
-    # p = get_plot_will_version(e, v, vp, nbh, sd, time_value, exp_details, x_subpath)
-    p = get_plot(e,v,vp,h,hp,sd,nbh,time_value,exp_details)
-
-    # if(hasfield(typeof(vp),:controls_sequence))
-    #     vehicle_path_x, vehicle_path_y, vehicle_path_theta  = get_vehicle_trajectory(v,vp,time_value,path_planning_details,exp_details)
-    #     plot!(vehicle_path_x,vehicle_path_y,"grey")
-    # end
+    if(hasfield(typeof(vp),:controls_sequence))
+        expected_path = output.vehicle_expected_trajectory[time_value]
+        plot!(expected_path[1], expected_path[2], line=(3,:dot,:blue))
+    end
     # annotate!(env.length/2, env.breadth/2, text("HG", :purple, :right, 20))
     display(p)
 end

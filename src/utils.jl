@@ -38,6 +38,15 @@ function wrap_between_0_to_2pi(theta)
     end
 end
 
+function get_vehicle_body_origin(vehicle_center_x_from_origin, vehicle_center_y_from_origin, vehicle_length, vehicle_breadth)
+    x0_min = vehicle_center_x_from_origin - 1/2*vehicle_length
+    x0_max = vehicle_center_x_from_origin + 1/2*vehicle_length
+    y0_min = vehicle_center_y_from_origin - 1/2*vehicle_breadth
+    y0_max = vehicle_center_y_from_origin + 1/2*vehicle_breadth
+    origin_body = VPolygon([[x0_min, y0_min], [x0_max, y0_min], [x0_max, y0_max], [x0_min, y0_max]])
+    return origin_body
+end
+
 function in_obstacle(px,py,obstacle,padding=0.0)
     return is_within_range(px,py,obstacle.x,obstacle.y,obstacle.r+padding)
 end
@@ -122,36 +131,18 @@ function move_vehicle(vehicle_x,vehicle_y,vehicle_theta,vehicle_L,steering_angle
     return (new_x,new_y,new_theta)
 end
 
-function get_vehicle_trajectory(vehicle,vehicle_params,time_value,planning_details,exp_details)
+function get_hybrid_astar_trajectory(vehicle,vehicle_params,index,planning_details,exp_details)
 
     current_x,current_y,current_theta = vehicle.x,vehicle.y,vehicle.theta
     vehicle_path_x, vehicle_path_y, vehicle_path_theta = Float64[current_x],Float64[current_y],Float64[current_theta]
-    current_time_step_start = floor(time_value/exp_details.one_time_step)*planning_details.one_time_step
-    current_time_step_end = current_time_step_start + planning_details.one_time_step
-    num_steps_first_interval = Int64( (current_time_step_end - time_value)/exp_details.simulator_time_step )
-    num_steps_remaining_intervals = Int64(planning_details.one_time_step/exp_details.simulator_time_step)
 
-    for i in 1:num_steps_first_interval
-        steering_angle = vehicle_params.controls_sequence[1]
-        # steering_angle = get_steering_angle(vehicle_params.L,action,planning_details.veh_path_planning_v,planning_details.one_time_step)
-        new_x,new_y,new_theta = get_new_vehicle_position(current_x,current_y,current_theta,vehicle_params.L,steering_angle,planning_details.veh_path_planning_v,exp_details.simulator_time_step)
+    for steering_angle in vehicle_params.controls_sequence[index:end]
+        new_x,new_y,new_theta = get_new_vehicle_position(current_x,current_y,current_theta,vehicle_params.wheelbase,
+                                        steering_angle,planning_details.veh_path_planning_v,planning_details.one_time_step)
         push!(vehicle_path_x,new_x)
         push!(vehicle_path_y,new_y)
         push!(vehicle_path_theta,new_theta)
         current_x,current_y,current_theta = new_x,new_y,new_theta
-    end
-
-    for steering_angle in vehicle_params.controls_sequence[2:end]
-        # steering_angle = get_steering_angle(vehicle_params.L,action,planning_details.veh_path_planning_v,planning_details.one_time_step)
-        for i in 1:num_steps_remaining_intervals
-            new_x,new_y,new_theta = get_new_vehicle_position(current_x,current_y,current_theta,vehicle_params.L,
-                                            steering_angle,planning_details.veh_path_planning_v,exp_details.simulator_time_step)
-            push!(vehicle_path_x,new_x)
-            push!(vehicle_path_y,new_y)
-            push!(vehicle_path_theta,new_theta)
-            current_x,current_y,current_theta = new_x,new_y,new_theta
-            # println(current_x, " ", current_y, " ", current_theta," ",action)
-        end
     end
 
     return vehicle_path_x,vehicle_path_y,vehicle_path_theta

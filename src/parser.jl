@@ -33,7 +33,7 @@ function POMPDPlanningDetails(obj)
         obj.observation_discretization_length, #=observation_discretization_length::Float64=#
         obj.d_near, #=d_near::Float64=#
         obj.d_far, #=d_far::Float64=#
-        obj.pomdp_planning_time, #=planning_time::Float64=#
+        obj.ES_pomdp_planning_time, #=planning_time::Float64=#
         obj.pomdp_action_delta_speed, #=action_delta_speed::Float64=#
         obj.pomdp_action_max_delta_heading_angle, #=action_max_delta_heading_angle::Float64=#
         obj.tree_search_max_depth, #=tree_search_max_depth::Int64=#
@@ -71,7 +71,7 @@ function OutputObj()
         false, #=vehicle_ran_into_boundary_wall::Bool=#
         false, #=vehicle_ran_into_obstacle::Bool=#
         false, #=vehicle_reached_goal::Bool=#
-        OrderedDict(), #=vehicle_trajectory_executed::OrderedDict=#
+        # OrderedDict(), #=vehicle_trajectory_executed::OrderedDict=#
         OrderedDict(), #=vehicle_trajectory_future::OrderedDict=#
         OrderedDict(), #=pomdp_planners::OrderedDict=#
         OrderedDict(), #=nearby_humans::OrderedDict=#

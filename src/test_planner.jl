@@ -1,4 +1,4 @@
-t = 6
+t = 7.5
 na, info = action_info(pomdp_planner, output.b_root[t]); println(na)
 
 s = rand(MersenneTwister(1), output.b_root[t])
