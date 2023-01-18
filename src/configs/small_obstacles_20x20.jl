@@ -22,7 +22,7 @@ small_obstacles_20x20 =  InputParameters(
     30.0, #=lidar_range::Float64=#
     6, #=num_nearby_humans::Int64=#
     3/3*pi, #=cone_half_angle::Float64=#
-    1.0, #=pomdp_discount_factor::Float64=#
+    0.98, #=pomdp_discount_factor::Float64=#
     0.5, #=min_safe_distance_from_human::Float64=#
     0.0, #=min_safe_distance_from_obstacle::Float64=#
     1.0, #=radius_around_vehicle_goal::Float64=#

@@ -285,7 +285,7 @@ function POMDPs.gen(m::LimitedSpacePOMDP, s, a, rng)
     #     println(sp)
     #     println(r)
     # end
-
+    # println("REWARD is : ",r)
     return (sp=sp, o=observed_positions, r=r)
 end
 #=
@@ -323,12 +323,12 @@ end
 #This is not accurate for HV or NHV, especially when static obstacles are present. Can we get a better and tighter upper bound?
 function time_to_goal(s::StateLimitedSpacePOMDP,m::LimitedSpacePOMDP)
     remaining_path_length = m.rollout_guide.len - s.index_vehicle_controls_sequence
-    return ceil(remaining_path_length/m.max_vehicle_speed)
+    return floor(remaining_path_length/(m.max_vehicle_speed/m.one_time_step))
 end
 
 function calculate_upper_bound(m::LimitedSpacePOMDP, b)
 
-    # lower = lbound(DefaultPolicyLB(FunctionPolicy(b->calculate_lower_bound(Limited_space_pomdp, b)),max_depth=100),m,b)
+    # lower = lbound(DefaultPolicyLB(FunctionPolicy(b->calculate_lower_bound(m, b)),max_depth=100),m,b)
     value_sum = 0.0
     if(b.depth == 100)
         return value_sum
@@ -352,7 +352,7 @@ function calculate_upper_bound(m::LimitedSpacePOMDP, b)
     end
     # println("Upper bound is :", value_sum)
     # u = (value_sum)/weight_sum(b)
-    # if lower > value_sum
+    # if lower > value_sum + 1
     #     push!(bad, (lower,value_sum,b))
     #     @show("While debugging ",lower,value_sum,b.depth)
     # end
@@ -371,12 +371,16 @@ function calculate_lower_bound(m::LimitedSpacePOMDP,b)
 
     #This bool is also used to check if all the states in the belief are terminal or not.
     first_execution_flag = true
+    debug=false
     for (s, w) in weighted_particles(b)
         if(s.vehicle_x == -100.0 && s.vehicle_y == -100.0)
             continue
         else
             if(first_execution_flag)
                 first_execution_flag = false
+                if(debug)
+                    println(s)
+                end
             else
                 dist_to_closest_human = 20000.0  #Some really big infeasible number (not Inf to avoid the type mismatch error)
                 for human in s.nearby_humans
@@ -386,6 +390,9 @@ function calculate_lower_bound(m::LimitedSpacePOMDP,b)
                     end
                     if(dist_to_closest_human < m.d_near)
                         delta_speed = -delta_speed
+                        if(debug)
+                            println(ActionLimitedSpacePOMDP(delta_speed))
+                        end
                         return ActionLimitedSpacePOMDP(delta_speed)
                     end
                 end
@@ -403,7 +410,13 @@ function calculate_lower_bound(m::LimitedSpacePOMDP,b)
 
     #This condition is true only when all the states in the belief are terminal. In that case, just return (0.0,0.0)
     if(first_execution_flag)
+        if(debug)
+            println(ActionLimitedSpacePOMDP(delta_speed))
+        end
         return ActionLimitedSpacePOMDP(0.0)
+    end
+    if(debug)
+        println(ActionLimitedSpacePOMDP(delta_speed))
     end
     return ActionLimitedSpacePOMDP(delta_speed)
 end

@@ -182,7 +182,7 @@ function get_plot(env, vehicle, vehicle_body, vehicle_params, nearby_humans, sen
             # scatter!(snapshot, [human.x], [human.y], color=nearby_human_color, label="")
             plot!(snapshot, circleShape(human.x, human.y, exp_details.max_risk_distance),color=nearby_human_color,
                         fillalpha=0.2, linecolor=:black, linewidth=2.0, label="", seriestype = [:shape,])
-            # Plots.annotate!(human.x, human.y, text(string(human_id), :purple, :center, 15))
+            Plots.annotate!(human.x, human.y, text(string(human_id), :purple, :center, 15))
             Plots.annotate!(human.x, human.y, text("H",nearby_human_color, :center, :black, 10))
             continue
         end
