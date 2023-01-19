@@ -262,8 +262,8 @@ function get_num_risks(vehicle,vehicle_params,human_position_data,min_safe_dista
         vehicle_center_y = vehicle.y #+ vehicle_params.dist_origin_to_center*sin(vehicle.theta)
         for human in human_position_data
             euclidean_distance = sqrt( (human.x - vehicle_center_x)^2 + (human.y - vehicle_center_y)^2 )
-            if(euclidean_distance<=(vehicle_params.radius+min_safe_distance_from_human))
-            # if(euclidean_distance<=(min_safe_distance_from_human))
+            # if(euclidean_distance<=(vehicle_params.radius+min_safe_distance_from_human))
+            if(euclidean_distance<=(min_safe_distance_from_human))
                 println( "A risky scenario encountered and the distance is : ", euclidean_distance )
                 println( "Minimum allowed distance is : ", min_safe_distance_from_human )
                 println(human)

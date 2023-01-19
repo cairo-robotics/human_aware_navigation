@@ -76,11 +76,11 @@ function low_speed_penalty(current_vehicle_speed::Float64, max_vehicle_speed::Fl
 end
 
 #Immediate Stop penalty
-global counter = 1
+# global counter = 1
 function immediate_stop_penalty(immediate_stop_flag::Bool, penalty::Float64)
     if(immediate_stop_flag)
-        println("AH",counter)
-        global counter+=1
+        # println("AH",counter)
+        # global counter+=1
         return 0*penalty/10.0
         # return 0.0
     else
@@ -105,3 +105,4 @@ function unsmooth_motion_penalty(a)
         return 0.0
     end
 end
+Pkg.add("LazySets")

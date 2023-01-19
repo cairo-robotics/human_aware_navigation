@@ -252,3 +252,11 @@ function observe(output,exp_details,time_value,veh_body_origin,vehicle_executed_
     # annotate!(env.length/2, env.breadth/2, text("HG", :purple, :right, 20))
     display(p)
 end
+
+function generate_gif(output, exp_details, veh_body_origin)
+    vehicle_executed_trajectory = []
+    anim = @animate for k ∈ keys(output.sim_objects)
+        observe(output, exp_details, k, veh_body_origin, vehicle_executed_trajectory);
+    end
+    gif(anim, "es_planner.gif", fps = 10)
+end

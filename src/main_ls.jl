@@ -22,21 +22,25 @@ include("configs/small_obstacles_20x20.jl")
 input_config = small_obstacles_20x20
 
 #=
-Define environment
-=#
-env = generate_environment(input_config.env_length,input_config.env_breadth,input_config.obstacles)
-
-#=
 Define experiment details and POMDP planning details
 =#
 pomdp_details = POMPDPlanningDetails(input_config)
 pomdp_details.planning_time = input_config.LS_pomdp_planning_time
 exp_details = ExperimentDetails(input_config)
+output = OutputObj()
+
+#=
+Define environment
+=#
+env = generate_environment(input_config.env_length,input_config.env_breadth,input_config.obstacles)
 exp_details.env = env
 exp_details.human_goal_locations = get_human_goals(env)
+
+#=
+Define path planning details
+=#
 # path_planning_details = PathPlanningDetails(0,20.0,1.0,100.0,Location[],1.0,1.0,0.99,0.5,0.1)
 path_planning_details = PathPlanningDetails(input_config, env)
-output = OutputObj()
 
 
 #=
