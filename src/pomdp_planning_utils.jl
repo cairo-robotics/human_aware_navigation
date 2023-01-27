@@ -46,6 +46,7 @@ Reward functions for the POMDP model
 # Human Collision Penalty
 function human_collision_penalty(human_collision_flag::Bool, penalty::Float64)
     if(human_collision_flag)
+        # println("HG")
         return penalty
     else
         return 0.0
@@ -81,7 +82,7 @@ function immediate_stop_penalty(immediate_stop_flag::Bool, penalty::Float64)
     if(immediate_stop_flag)
         # println("AH",counter)
         # global counter+=1
-        return 0*penalty/10.0
+        return penalty/10.0
         # return 0.0
     else
         return 0.0
@@ -89,9 +90,11 @@ function immediate_stop_penalty(immediate_stop_flag::Bool, penalty::Float64)
 end
 
 #Penalty for heading angle changes
-function heading_angle_change_penalty(steering_angle::Float64)
-    if(steering_angle != 0.0)
-        return -10.0
+function heading_angle_change_penalty(vehicle_velocity::Float64,steering_angle::Float64)
+    if(vehicle_velocity == 0.0)
+        return 0.0
+    elseif(steering_angle != 0.0)
+        return -1.0
     else
         return 0.0
     end
@@ -105,4 +108,3 @@ function unsmooth_motion_penalty(a)
         return 0.0
     end
 end
-Pkg.add("LazySets")

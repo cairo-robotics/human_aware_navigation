@@ -68,6 +68,7 @@ function OutputObj()
         0, #=number_sudden_stops::Int64=#
         0, #=number_risky_scenarios::Int64=#
         0.0, #=time_taken::Float64=#
+        VPolygon(), #=vehicle_body_at_origin::VPolygon=#
         false, #=vehicle_ran_into_boundary_wall::Bool=#
         false, #=vehicle_ran_into_obstacle::Bool=#
         false, #=vehicle_reached_goal::Bool=#

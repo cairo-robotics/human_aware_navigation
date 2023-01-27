@@ -178,6 +178,7 @@ function POMDPs.gen(m::ExtendedSpacePOMDP, s, a, rng)
     next_human_states = HumanState[]
     observed_positions = Location[]
 
+    println(s)
     #=
         Check if current vehicle position collides with any nearby human.
         Check if current vehicle position collides with any static obstacle.
@@ -252,6 +253,7 @@ function POMDPs.gen(m::ExtendedSpacePOMDP, s, a, rng)
         observed_positions = Location[ Location(-50.0,-50.0) ]
         sp = StateExtendedSpacePOMDP(new_vehicle_position[1],new_vehicle_position[2],new_vehicle_position[3],s.vehicle_v,next_human_states)
         r = vehicle_goal_reached_reward(vehicle_reached_goal, m.goal_reached_reward)
+        # println(r)
         return (sp=sp, o=observed_positions, r=r)
     end
 
@@ -352,9 +354,10 @@ function POMDPs.gen(m::ExtendedSpacePOMDP, s, a, rng)
     r += immediate_stop_penalty(immediate_stop, m.human_collision_penalty)
     #println("Reward if you had to apply immediate brakes", r)
     #Penalize if vehicle's heading angle changes
-    r += heading_angle_change_penalty(a.steering_angle)
+    r += heading_angle_change_penalty(sp.vehicle_v,a.steering_angle)
     #Penalty to avoid long paths
     r += -1.0
+    println(r)
 
     # if( sp.vehicle_x<0.0+sp.vehicle_L || sp.vehicle_y<0.0+sp.vehicle_L || sp.vehicle_x>m.world.length-sp.vehicle_L || sp.vehicle_y>m.world.breadth-sp.vehicle_L )
     #     println(s)
@@ -701,34 +704,33 @@ function calculate_lower_bound(m::ExtendedSpacePOMDP{HJBPolicy},b)
         else
             if(first_execution_flag)
                 first_execution_flag = false
+            end
+            dist_to_closest_human = 20000.0  #Some really big infeasible number (not Inf to avoid the type mismatch error)
+            for human in s.nearby_humans
+                euclidean_distance = sqrt((s.vehicle_x - human.x)^2 + (s.vehicle_y - human.y)^2)
+                if(euclidean_distance < dist_to_closest_human)
+                    dist_to_closest_human = euclidean_distance
+                end
+                if(dist_to_closest_human < m.d_near)
+                    delta_speed = -delta_speed
+                    safe_value_lim = 750.0
+                    a, q_vals = reactive_policy(SVector(s.vehicle_x,s.vehicle_y,wrap_between_negative_pi_to_pi(s.vehicle_theta),s.vehicle_v),delta_speed,
+                        safe_value_lim,m.rollout_guide.get_actions,m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,
+                        m.rollout_guide.value_array,m.rollout_guide.veh,m.rollout_guide.state_grid)
+                    if(debug)
+                        println("Near a Human")
+                        println( ActionExtendedSpacePOMDP(a[1],delta_speed) )
+                    end
+                    return ActionExtendedSpacePOMDP(a[1],delta_speed)
+                end
+            end
+            if(dist_to_closest_human > m.d_far)
+                chosen_delta_speed = m.vehicle_action_delta_speed
             else
-                dist_to_closest_human = 20000.0  #Some really big infeasible number (not Inf to avoid the type mismatch error)
-                for human in s.nearby_humans
-                    euclidean_distance = sqrt((s.vehicle_x - human.x)^2 + (s.vehicle_y - human.y)^2)
-                    if(euclidean_distance < dist_to_closest_human)
-                        dist_to_closest_human = euclidean_distance
-                    end
-                    if(dist_to_closest_human < m.d_near)
-                        delta_speed = -delta_speed
-                        safe_value_lim = 750.0
-                        a, q_vals = reactive_policy(SVector(s.vehicle_x,s.vehicle_y,wrap_between_negative_pi_to_pi(s.vehicle_theta),s.vehicle_v),delta_speed,
-                            safe_value_lim,m.rollout_guide.get_actions,m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,
-                            m.rollout_guide.value_array,m.rollout_guide.veh,m.rollout_guide.state_grid)
-                        if(debug)
-                            println("Near a Human")
-                            println( ActionExtendedSpacePOMDP(a[1],a[2]) )
-                        end
-                        return ActionExtendedSpacePOMDP(a[1],a[2])
-                    end
-                end
-                if(dist_to_closest_human > m.d_far)
-                    chosen_delta_speed = m.vehicle_action_delta_speed
-                else
-                    chosen_delta_speed = 0.0
-                end
-                if(chosen_delta_speed < delta_speed)
-                    delta_speed = chosen_delta_speed
-                end
+                chosen_delta_speed = 0.0
+            end
+            if(chosen_delta_speed < delta_speed)
+                delta_speed = chosen_delta_speed
             end
         end
     end

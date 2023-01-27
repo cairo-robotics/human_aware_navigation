@@ -6,7 +6,6 @@ elseif user == "Will"
     Pkg.activate("/Users/willpope/.julia/dev/BellmanPDEs")
 end
 using BellmanPDEs
-using LazySets
 using JLD2
 using ProfileView
 using Revise
@@ -62,6 +61,7 @@ veh_params = VehicleParametersESPlanner(input_config.veh_wheelbase,input_config.
                 input_config.veh_breadth,input_config.veh_dist_origin_to_center, r,
                 input_config.veh_max_speed,input_config.veh_max_steering_angle,veh_goal)
 veh_body_origin = get_vehicle_body_origin(veh_params.dist_origin_to_center,0.0,veh_params.length,veh_params.breadth)
+output.vehicle_body_at_origin = veh_body_origin
 
 #=
 Define Humans
@@ -120,7 +120,7 @@ create_gif = true
 if(create_gif)
     vehicle_executed_trajectory = []
     anim = @animate for k ∈ keys(output.sim_objects)
-        observe(output, exp_details, k, veh_body_origin, vehicle_executed_trajectory);
+        observe(output, exp_details, k, vehicle_executed_trajectory);
     end
     gif(anim, "es_planner.gif", fps = 10)
 end

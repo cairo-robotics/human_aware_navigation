@@ -1,4 +1,5 @@
-t = 8.0
+t = 1.5
+tp = 2.0
 na, info = action_info(pomdp_planner, output.b_root[t]); println(na)
 
 s = rand(MersenneTwister(1), output.b_root[t])
@@ -22,8 +23,8 @@ end
 
 # root_scenarios = [i=>rand(MersenneTwister(1), output.b_root[t]) for i in 1:5]
 s = rand(MersenneTwister(1), output.b_root[t]);
-root_scenarios = [i=>s for i in 1:100];
-belief = ScenarioBelief(root_scenarios,pomdp_planner.rs, 1, missing);
+start_scenarios = [i=>s for i in 1:100];
+belief = ScenarioBelief(start_scenarios,pomdp_planner.rs, 1, missing);
 p=[]
 for i in 1:30
     println(i)

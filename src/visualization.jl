@@ -1,7 +1,6 @@
 using Plots
 using UnicodePlots
 using D3Trees
-using LazySets
 
 #Function to display a circle
 function circleShape(h,k,r)
@@ -232,17 +231,18 @@ end
 
 
 #Function to display the environment, vehicle and humans
-function observe(output,exp_details,time_value,veh_body_origin,vehicle_executed_trajectory)
+function observe(output,exp_details,time_value,vehicle_executed_trajectory)
     e = output.sim_objects[time_value].env
     v = output.sim_objects[time_value].vehicle
     vp = output.sim_objects[time_value].vehicle_params
+    vb = output.vehicle_body_at_origin
     h = output.sim_objects[time_value].humans
     hp = output.sim_objects[time_value].humans_params
     sd = output.sim_objects[time_value].vehicle_sensor_data
     nbh = output.nearby_humans[time_value]
     push!(vehicle_executed_trajectory, v)
 
-    p = get_plot(e, v, veh_body_origin, vp, nbh, sd, time_value, exp_details, vehicle_executed_trajectory)
+    p = get_plot(e, v, vb, vp, nbh, sd, time_value, exp_details, vehicle_executed_trajectory)
     # p = get_plot(e,v,vp,h,hp,sd,nbh,time_value,exp_details)
 
     if(hasfield(typeof(vp),:controls_sequence))
@@ -253,10 +253,10 @@ function observe(output,exp_details,time_value,veh_body_origin,vehicle_executed_
     display(p)
 end
 
-function generate_gif(output, exp_details, veh_body_origin)
+function generate_gif(output, exp_details)
     vehicle_executed_trajectory = []
     anim = @animate for k ∈ keys(output.sim_objects)
-        observe(output, exp_details, k, veh_body_origin, vehicle_executed_trajectory);
+        observe(output, exp_details, k, vehicle_executed_trajectory);
     end
     gif(anim, "es_planner.gif", fps = 10)
 end

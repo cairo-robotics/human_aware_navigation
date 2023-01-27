@@ -1,6 +1,7 @@
 using Random
 using DataStructures
 using Parameters
+using LazySets
 
 #Various different Struct definitions
 
@@ -205,10 +206,10 @@ mutable struct Output
     number_sudden_stops::Int64
     number_risky_scenarios::Int64
     time_taken::Float64
+    vehicle_body_at_origin::VPolygon
     vehicle_ran_into_boundary_wall::Bool
     vehicle_ran_into_obstacle::Bool
     vehicle_reached_goal::Bool
-    #vehicle_executed_trajectory::OrderedDict
     vehicle_expected_trajectory::OrderedDict
     pomdp_planners::OrderedDict
     nearby_humans::OrderedDict
