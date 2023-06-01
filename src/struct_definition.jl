@@ -2,6 +2,7 @@ using Random
 using DataStructures
 using Parameters
 using LazySets
+using StaticArrays
 
 #Various different Struct definitions
 
@@ -44,13 +45,30 @@ struct NearbyHumans
 end
 # nbh = NearbyHumans(HumanState[], Int64[], HumanGoalsBelief[])
 
-struct Vehicle
+struct Holonomic end
+
+struct NonHolonomic end
+
+struct VehicleState <: FieldVector{4,Float64}
     x::Float64
     y::Float64
     theta::Float64
     v::Float64
 end
-# v = Vehicle(0.0,0.0,0.0,0.0)
+# v = VehicleState(0.0,0.0,0.0,0.0)
+
+abstract type VehicleParams end
+
+struct VehicleParameters{T, F<:Function}
+    wheelbase::Float64
+    length::Float64
+    breadth::Float64
+    dist_origin_to_center::Float64
+    radius::Float64
+    max_speed::Float64
+    max_steering_angle::Float64
+    goal::Location
+end
 
 struct VehicleSensor
     lidar_data::Array{HumanState,1}
@@ -59,7 +77,7 @@ struct VehicleSensor
 end
 # vsd = VehicleSensor(HumanState[], Int64[], HumanGoalsBelief[])
 
-struct VehicleParametersESPlanner
+struct VehicleParametersESPlanner{T}
     wheelbase::Float64
     length::Float64
     breadth::Float64
@@ -71,7 +89,7 @@ struct VehicleParametersESPlanner
 end
 # vp_es = VehicleParametersESPlanner(0.3,3.0,Location(100.0,100.0))
 
-struct VehicleParametersLSPlanner
+struct VehicleParametersLSPlanner{T}
     wheelbase::Float64
     length::Float64
     breadth::Float64

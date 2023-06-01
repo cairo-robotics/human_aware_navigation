@@ -131,14 +131,37 @@ function move_vehicle(vehicle_x,vehicle_y,vehicle_theta,vehicle_L,steering_angle
     return (new_x,new_y,new_theta)
 end
 
+function move_vehicle(vehicle_x,vehicle_y,vehicle_theta,delta_angle,vehicle_speed,time_duration)
+    if(vehicle_speed == 0.0)
+        return VehcleState(vehicle_x,vehicle_y,vehicle_theta,vehicle_speed)
+    else
+        new_theta = wrap_between_0_and_2Pi(vehicle_theta + delta_angle)
+        new_x = vehicle_x + vehicle_speed*cos(new_theta)*time_duration
+        new_y = vehicle_y + vehicle_speed*sin(new_theta)*time_duration
+        return VehicleState(new_x,new_y,new_theta,vehicle_speed)
+    end
+end
+
+function move_vehicle(vehicle,delta_angle,vehicle_speed,time_duration)
+    if(vehicle_speed == 0.0)
+        return VehicleState(vehicle.x,vehicle.y,vehicle.theta)
+    else
+        new_theta = wrap_between_0_and_2Pi(vehicle.theta + delta_angle)
+        new_x = vehicle.x + vehicle_speed*cos(new_theta)*time_duration
+        new_y = vehicle.y + vehicle_speed*sin(new_theta)*time_duration
+    end
+    return VehicleState(new_x,new_y,new_theta,vehicle_speed)
+end
+
 function get_hybrid_astar_trajectory(vehicle,vehicle_params,index,planning_details,exp_details)
 
     current_x,current_y,current_theta = vehicle.x,vehicle.y,vehicle.theta
     vehicle_path_x, vehicle_path_y, vehicle_path_theta = Float64[current_x],Float64[current_y],Float64[current_theta]
 
-    for steering_angle in vehicle_params.controls_sequence[index:end]
-        new_x,new_y,new_theta = get_new_vehicle_position(current_x,current_y,current_theta,vehicle_params.wheelbase,
-                                        steering_angle,planning_details.veh_path_planning_v,planning_details.one_time_step)
+    for control in vehicle_params.controls_sequence[index:end]
+        # new_x,new_y,new_theta = get_new_vehicle_position(current_x,current_y,current_theta,vehicle_params.wheelbase,
+                                        # control,planning_details.veh_path_planning_v,planning_details.one_time_step)
+        new_x,new_y,new_theta = get_new_vehicle_position(current_x,current_y,current_theta,control,planning_details.veh_path_planning_v,planning_details.one_time_step)
         push!(vehicle_path_x,new_x)
         push!(vehicle_path_y,new_y)
         push!(vehicle_path_theta,new_theta)
