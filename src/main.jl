@@ -1,10 +1,10 @@
-using Pkg
-user = "Himanshu"
-if user == "Himanshu"
-    Pkg.activate("/home/himanshu/Documents/Research/BellmanPDEs.jl/")
-elseif user == "Will"
-    Pkg.activate("/Users/willpope/.julia/dev/BellmanPDEs")
-end
+# using Pkg
+# user = "Himanshu"
+# if user == "Himanshu"
+#     Pkg.activate("/home/himanshu/Documents/Research/BellmanPDEs.jl/")
+# elseif user == "Will"
+#     Pkg.activate("/Users/willpope/.julia/dev/BellmanPDEs")
+# end
 using BellmanPDEs
 using JLD2
 using ProfileView
