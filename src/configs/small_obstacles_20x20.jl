@@ -35,8 +35,8 @@ small_obstacles_20x20 =  InputParameters(
     1.0, #=observation_discretization_length::Float64=#
     100, #=tree_search_max_depth::Int64=#
     50, #=num_scenarios::Int64=#
-    3.0, #=d_near::Float64 = 0.5=#
-    5.0, #=d_far::Float64 = 0.5=#
+    2.0, #=d_near::Float64 = 0.5=#
+    4.0, #=d_far::Float64 = 0.5=#
     0.4, #=es_pomdp_planning_time::Float64=#
     0.3, #=ls_pomdp_planning_time::Float64=#
     pi/4, #=pomdp_action_max_delta_heading_angle::Float64=#

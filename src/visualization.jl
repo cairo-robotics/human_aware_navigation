@@ -243,12 +243,14 @@ function observe(output,exp_details,time_value,vehicle_executed_trajectory)
     push!(vehicle_executed_trajectory, v)
 
     p = get_plot(e, v, vb, vp, nbh, sd, time_value, exp_details, vehicle_executed_trajectory)
+    # p = get_plot(e,v,vp,h,hp,sd,nbh,time_value,exp_details)
 
     if(hasfield(typeof(vp),:controls_sequence))
         expected_path = output.vehicle_expected_trajectory[time_value]
         plot!(expected_path[1], expected_path[2], line=(3,:dot,:blue))
     end
-    return p
+    # annotate!(env.length/2, env.breadth/2, text("HG", :purple, :right, 20))
+    display(p)
 end
 
 function generate_gif(output, exp_details)

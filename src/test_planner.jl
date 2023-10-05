@@ -2,12 +2,6 @@ t = 1.5
 tp = 2.0
 na, info = action_info(pomdp_planner, output.b_root[t]); println(na)
 
-test_pomdp_solver = DESPOTSolver(bounds=IndependentBounds(DefaultPolicyLB(FunctionPolicy(b->calculate_lower_bound(extended_space_pomdp, b)),max_depth=pomdp_details.tree_search_max_depth-98),
-                    calculate_upper_bound,check_terminal=true,consistency_fix_thresh=1e-5),K=1,D=2,
-                    T_max=pomdp_details.planning_time*1,tree_in_info=true)#,default_action=default_es_pomdp_action)
-test_pomdp_planner = POMDPs.solve(test_pomdp_solver, extended_space_pomdp);
-
-
 s = rand(MersenneTwister(1), output.b_root[t])
 sp,o,r = POMDPs.gen(extended_space_pomdp, s, calculate_lower_bound(extended_space_pomdp,s), MersenneTwister(1))
 

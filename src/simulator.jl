@@ -1,6 +1,6 @@
 struct NavigationSimulator{P}
     env::ExperimentEnvironment
-    vehicle::VehicleState
+    vehicle::Vehicle
     vehicle_params::P
     vehicle_sensor_data::VehicleSensor
     humans::Array{HumanState,1}
@@ -15,38 +15,38 @@ Returns a vehicle struct object
 =#
 
 #Propogte vehicle for Extended Space Planner
-function propogate_vehicle(vehicle_state, vehicle_params, steering_angle, speed, time_duration)
-    new_vehicle_state = move_vehicle(vehicle_state,vehicle_params,steering_angle,speed,time_duration)
-    return new_vehicle_state
+function propogate_vehicle(vehicle::Vehicle, vehicle_params::VehicleParametersESPlanner, steering_angle::Float64, speed::Float64, time_duration::Float64)
+    new_x,new_y,new_theta =  move_vehicle(vehicle.x,vehicle.y,vehicle.theta,vehicle_params.wheelbase,steering_angle,speed,time_duration)
+    return Vehicle(new_x,new_y,new_theta,speed)
 end
 
 #Propogte vehicle for Limited Space Planner
-function propogate_vehicle(vehicle_state, vehicle_params, vehicle_speed, current_time, time_duration, path_planning_details, exp_details)
+function propogate_vehicle(vehicle::Vehicle, vehicle_params::VehicleParametersLSPlanner, vehicle_speed::Float64, current_time::Float64,
+                                    time_duration::Float64, path_planning_details, exp_details)
 
     num_steps_on_vehicle_path = Int64((vehicle_speed * time_duration)/(path_planning_details.veh_path_planning_v*path_planning_details.one_time_step))
     time_between_steering_angle_changes = time_duration/num_steps_on_vehicle_path
     num_sim_steps = Int64(time_duration/exp_details.simulator_time_step)
     simulator_time_duration = time_between_steering_angle_changes/num_sim_steps
     CURRENT_TIME_VALUE = current_time
-    vehicle_type = typeof(vehicle)
-    complete_vehicle_path = vehicle_type[]
-    final_vehicle_path = OrderedDict(CURRENT_TIME_VALUE => vehicle_state)
-    current_vehicle_state =  vehicle_state
+    complete_vehicle_path = Vehicle[]
+    final_vehicle_path = OrderedDict(CURRENT_TIME_VALUE => vehicle)
+    current_x,current_y,current_theta = vehicle.x,vehicle.y,vehicle.theta
 
     num_loop_cycles = min(num_steps_on_vehicle_path, length(vehicle_params.controls_sequence))
     for i in 1:num_loop_cycles
         steering_angle = vehicle_params.controls_sequence[i]
         for j in 1:num_sim_steps
-            new_vehicle_state = move_vehicle(current_vehicle_state,vehicle_params,steering_angle,vehicle_speed,simulator_time_duration)
-            push!(complete_vehicle_path, new_vehicle_state)
-            current_vehicle_state = new_vehicle_state
+            new_x,new_y,new_theta = move_vehicle(current_x,current_y,current_theta,vehicle_params.wheelbase,steering_angle,vehicle_speed,simulator_time_duration)
+            push!(complete_vehicle_path, Vehicle(new_x,new_y,new_theta,vehicle_speed))
+            current_x,current_y,current_theta = new_x,new_y,new_theta
         end
     end
 
     if(vehicle_speed == 0.0)
         for i in 1:num_sim_steps
             CURRENT_TIME_VALUE = round(current_time + (i*exp_details.simulator_time_step), digits=1)
-            final_vehicle_path[CURRENT_TIME_VALUE] = vehicle_type(vehicle_state.x,vehicle_state.y,vehicle_state.theta,vehicle_speed)
+            final_vehicle_path[CURRENT_TIME_VALUE] = Vehicle(vehicle.x,vehicle.y,vehicle.theta,vehicle_speed)
         end
     else
         for i in 1:num_sim_steps
