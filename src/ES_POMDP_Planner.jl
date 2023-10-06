@@ -178,7 +178,7 @@ function POMDPs.gen(m::ExtendedSpacePOMDP, s, a, rng)
     next_human_states = HumanState[]
     observed_positions = Location[]
 
-    println(s)
+    # println(s)
     #=
         Check if current vehicle position collides with any nearby human.
         Check if current vehicle position collides with any static obstacle.
@@ -357,7 +357,7 @@ function POMDPs.gen(m::ExtendedSpacePOMDP, s, a, rng)
     r += heading_angle_change_penalty(sp.vehicle_v,a.steering_angle)
     #Penalty to avoid long paths
     r += -1.0
-    println(r)
+    # println(r)
 
     # if( sp.vehicle_x<0.0+sp.vehicle_L || sp.vehicle_y<0.0+sp.vehicle_L || sp.vehicle_x>m.world.length-sp.vehicle_L || sp.vehicle_y>m.world.breadth-sp.vehicle_L )
     #     println(s)
