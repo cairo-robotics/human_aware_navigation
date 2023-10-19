@@ -34,7 +34,7 @@ small_obstacles_20x20 =  InputParameters(
     10, #=num_segments_in_one_time_step::Int64=#
     1.0, #=observation_discretization_length::Float64=#
     100, #=tree_search_max_depth::Int64=#
-    50, #=num_scenarios::Int64=#
+    1, #=num_scenarios::Int64=#
     2.0, #=d_near::Float64 = 0.5=#
     4.0, #=d_far::Float64 = 0.5=#
     0.4, #=es_pomdp_planning_time::Float64=#
@@ -45,5 +45,5 @@ small_obstacles_20x20 =  InputParameters(
     0.1, #=simulator_time_step::Float64=#
     0.1, #=update_sensor_data_time_interval::Float64=#
     0.1, #=buffer_time::Float64=#
-    50.0 #=MAX_TIME_LIMIT::Float64=#
+    10.0 #=MAX_TIME_LIMIT::Float64=#
 )
