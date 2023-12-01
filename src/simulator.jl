@@ -342,8 +342,11 @@ function run_experiment!(current_sim_obj::NavigationSimulator{VehicleParametersE
             output.b_root[current_time_value] = b
 
             # Run DESPOT to calculate next action
-            next_pomdp_action, info = action_info(planner, b)
+            next_pomdp_action, info = @profiler action_info(planner, b)
+            # next_pomdp_action, info =
+            # println(JET.@report_opt action_info(planner, b))
 
+            return info
             if(debug)
                 println("Finished POMDP planning. Action selected")
                 time_taken = time() - start_time

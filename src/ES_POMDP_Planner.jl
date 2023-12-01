@@ -11,13 +11,13 @@ struct StateExtendedSpacePOMDP
     nearby_humans::Array{HumanState,1}
 end
 
-struct NewStateExtendedSpacePOMDP
-    vehicle_x::Float64
-    vehicle_y::Float64
-    vehicle_theta::Float64
-    vehicle_v::Float64
-    nearby_humans::SVector{M,HumanState} where M
-end
+# struct NewStateExtendedSpacePOMDP{M}
+#     vehicle_x::Float64
+#     vehicle_y::Float64
+#     vehicle_theta::Float64
+#     vehicle_v::Float64
+#     nearby_humans::SVector{M,HumanState}
+# end
 
 #=
 Struct for POMDP Action
@@ -30,12 +30,12 @@ end
 #=
 Struct for HJB policy
 =#
-struct HJBPolicy
+struct HJBPolicy{F1<:Function,F2<:Function}
     Dt::Float64
     value_array::Array{Float64,1}
     q_value_array::Array{Array{Float64,1},1}
-    get_actions::Function
-    get_cost::Function
+    get_actions::F1
+    get_cost::F2
     env::Environment
     veh::VehicleBody
     state_grid::StateGrid
@@ -223,27 +223,27 @@ function POMDPs.gen(m::ExtendedSpacePOMDP, s, a, rng)
     vehicle_center_x = s.vehicle_x + m.vehicle_D*cos(s.vehicle_theta)
     vehicle_center_y = s.vehicle_y + m.vehicle_D*sin(s.vehicle_theta)
     # return
-    # for human in s.nearby_humans
-    for i in 1:length(s.nearby_humans)
-        human = s.nearby_humans[i]
+    for human in s.nearby_humans
+    # for i in 1:length(s.nearby_humans)
+        # human = s.nearby_humans[i]
         # println("jj")
-        # if(s.vehicle_v != 0.0)
-        #     if( is_within_range(vehicle_center_x, vehicle_center_y, human.x, human.y, m.min_safe_distance_from_human+m.vehicle_R) )
-        #         # println("Collision with this human " ,s.nearby_humans[human_index] , " ", time_index )
-        #         println("Vehicle's position is " ,vehicle_path[time_index] , "\nHuman's position is ", intermediate_human_location )
-        #         new_vehicle_position = (-100.0, -100.0, -100.0)
-        #         collision_with_human = true
-        #         # observed_positions = Location[ Location(-50.0,-50.0) ]
-        #         observed_positions = Svector{1,Location}(Location(-50.0,-50.0))
-        #         # sp = StateExtendedSpacePOMDP(new_vehicle_position[1],new_vehicle_position[2],new_vehicle_position[3],s.vehicle_v,next_human_states)
-        #         sp = NewStateExtendedSpacePOMDP(new_vehicle_position[1],new_vehicle_position[2],new_vehicle_position[3],s.vehicle_v,s.nearby_humans)
-        #         r = human_collision_penalty(collision_with_human, m.human_collision_penalty)
-        #         return (sp=sp, o=observed_positions, r=r)
-        #     end
-        # end
+        if(s.vehicle_v != 0.0)
+            if( is_within_range(vehicle_center_x, vehicle_center_y, human.x, human.y, m.min_safe_distance_from_human+m.vehicle_R) )
+                # println("Collision with this human " ,s.nearby_humans[human_index] , " ", time_index )
+                # println("Vehicle's position is " ,vehicle_path[time_index] , "\nHuman's position is ", intermediate_human_location )
+                new_vehicle_position = (-100.0, -100.0, -100.0)
+                collision_with_human = true
+                observed_positions = Location[ Location(-50.0,-50.0) ]
+                # observed_positions = Svector{1,Location}(Location(-50.0,-50.0))
+                # sp = StateExtendedSpacePOMDP(new_vehicle_position[1],new_vehicle_position[2],new_vehicle_position[3],s.vehicle_v,next_human_states)
+                sp = StateExtendedSpacePOMDP(new_vehicle_position[1],new_vehicle_position[2],new_vehicle_position[3],s.vehicle_v,s.nearby_humans)
+                r = human_collision_penalty(collision_with_human, m.human_collision_penalty)
+                return (sp=sp, o=observed_positions, r=r)
+            end
+        end
     end
     # println("Success")
-    return 11
+    # return 11
     for obstacle in m.world.obstacles
         if( is_within_range(vehicle_center_x,vehicle_center_y,obstacle.x,obstacle.y,obstacle.r+m.min_safe_distance_from_obstacle+m.vehicle_R) )
             # println("Collision with this obstacle " ,obstacle)
@@ -393,20 +393,22 @@ function POMDPs.gen(m::ExtendedSpacePOMDP, s, a, rng)
     # println("***************************************")
     return (sp=sp, o=observed_positions, r=r)
 end
-#=
-function test_gen(unit_test_env,unit_test_es_pomdp,rng)
-    unit_test_h1 = HumanState(10.0,10.0,1.0,Location(0.0,0.0))
-    unit_test_h2 = HumanState(10.0,10.0,1.0,Location(100.0,0.0))
-    # unit_test_nearby_humans = HumanState[unit_test_h1,unit_test_h2]
-    unit_test_nearby_humans = SVector{2,HumanState}(unit_test_h1,unit_test_h2)
-    unit_test_es_planner_state = NewStateExtendedSpacePOMDP(2.0,2.0,0.0,1.0,unit_test_nearby_humans)
+
+function testgen(unit_test_env,unit_test_es_pomdp,rng)
+    # unit_test_h1 = HumanState(10.0,10.0,1.0,Location(0.0,0.0))
+    # unit_test_h2 = HumanState(10.0,10.0,1.0,Location(100.0,0.0))
+    unit_test_h1 = HumanState(2.0,4.0,1.0,Location(0.0,0.0))
+    unit_test_h2 = HumanState(3.0,3.0,1.0,Location(100.0,0.0))
+    unit_test_nearby_humans = HumanState[unit_test_h1,unit_test_h2]
+    # unit_test_nearby_humans = SVector{2,HumanState}(unit_test_h1,unit_test_h2)
+    unit_test_es_planner_state = StateExtendedSpacePOMDP(2.0,2.0,0.0,1.0,unit_test_nearby_humans)
     unit_test_es_planner_action = ActionExtendedSpacePOMDP(pi/12,1.0)
     # unit_test_env = ExperimentEnvironment(100.0,100.0,SVector{0,ObstacleLocation}())
     # unit_test_env = ExperimentEnvironment(100.0,100.0,ObstacleLocation[])
     # unit_test_es_pomdp = ExtendedSpacePOMDP(pomdp_details,env,veh_params,rollout_guide)
     return POMDPs.gen( unit_test_es_pomdp,unit_test_es_planner_state,unit_test_es_planner_action,rng )
 end
-=#
+
 
 
 #=
@@ -706,6 +708,7 @@ end
 Lower bound policy function for DESPOT
 =#
 function calculate_lower_bound(m::ExtendedSpacePOMDP{HJBPolicy},b)
+    # println(typeof(b))
     #Implement a reactive controller for your lower bound
     delta_speed = m.vehicle_action_delta_speed
 
@@ -771,7 +774,7 @@ function calculate_lower_bound(m::ExtendedSpacePOMDP{HJBPolicy},b)
     end
     s = first(particles(b))
     safe_value_lim = 750.0
-    a, q_vals = reactive_policy(SVector(s.vehicle_x,s.vehicle_y,wrap_between_negative_pi_to_pi(s.vehicle_theta),s.vehicle_v),delta_speed,
+    a::Float64, _ = reactive_policy(SVector(s.vehicle_x,s.vehicle_y,wrap_between_negative_pi_to_pi(s.vehicle_theta),s.vehicle_v),delta_speed,
         safe_value_lim,m.rollout_guide.get_actions,m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,
         m.rollout_guide.value_array,m.rollout_guide.veh,m.rollout_guide.state_grid)
     if(debug)

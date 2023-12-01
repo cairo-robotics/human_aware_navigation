@@ -106,7 +106,7 @@ pomdp_planner = POMDPs.solve(pomdp_solver, extended_space_pomdp);
 #=
 Run the experiment
 =#
-run_experiment!(initial_sim_obj, pomdp_planner, pomdp_details, exp_details, output)
+c= run_experiment!(initial_sim_obj, pomdp_planner, pomdp_details, exp_details, output)
 
 #=
 Print useful values from the experiment
