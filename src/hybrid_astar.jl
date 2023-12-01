@@ -1,5 +1,4 @@
 #Load Required Packages
-using DifferentialEquations
 using DataStructures
 using Random
 using LinearAlgebra
