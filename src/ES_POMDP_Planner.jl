@@ -30,17 +30,27 @@ end
 #=
 Struct for HJB policy
 =#
-struct HJBPolicy{F1<:Function,F2<:Function}
+struct HJBPolicy
     Dt::Float64
     value_array::Array{Float64,1}
     q_value_array::Array{Array{Float64,1},1}
-    get_actions::F1
-    get_cost::F2
+    get_actions::Function
+    get_cost::Function
     env::Environment
     veh::VehicleBody
     state_grid::StateGrid
 end
 
+# struct HJBPolicy{F1<:Function,F2<:Function}
+#     Dt::Float64
+#     value_array::Array{Float64,1}
+#     q_value_array::Array{Array{Float64,1},1}
+#     get_actions::F1
+#     get_cost::F2
+#     env::Environment
+#     veh::VehicleBody
+#     state_grid::StateGrid
+# end
 #=
 Struct for POMDP
 =#
@@ -169,6 +179,17 @@ unit_test_new_velocity = 4.0
 unit_test_world_length, unit_test_world_breadth = 100.0,100.0
 update_vehicle_position_pomdp_planning(unit_test_vehicle.x,unit_test_vehicle.y,unit_test_vehicle.theta,unit_test_vehicle.L,unit_test_delta_angle,
                                                         unit_test_new_velocity,unit_test_world_length, unit_test_world_breadth,1.0)
+
+function testUV(s,unit_test_es_pomdp)
+    unit_test_h1 = HumanState(10.0,10.0,1.0,Location(0.0,0.0))
+    unit_test_h2 = HumanState(10.0,10.0,1.0,Location(100.0,0.0))
+    # unit_test_h1 = HumanState(2.0,4.0,1.0,Location(0.0,0.0))
+    # unit_test_h2 = HumanState(3.0,3.0,1.0,Location(100.0,0.0))
+    # unit_test_nearby_humans = HumanState[unit_test_h1,unit_test_h2]
+    # unit_test_nearby_humans = SVector{2,HumanState}(unit_test_h1,unit_test_h2)
+    # unit_test_es_planner_state = StateExtendedSpacePOMDP(2.0,2.0,0.0,1.0,unit_test_nearby_humans)
+    return update_vehicle_position(s, unit_test_es_pomdp, 0.0, 2.0)
+end
 =#
 
 
@@ -395,12 +416,12 @@ function POMDPs.gen(m::ExtendedSpacePOMDP, s, a, rng)
 end
 
 function testgen(unit_test_env,unit_test_es_pomdp,rng)
-    # unit_test_h1 = HumanState(10.0,10.0,1.0,Location(0.0,0.0))
-    # unit_test_h2 = HumanState(10.0,10.0,1.0,Location(100.0,0.0))
-    unit_test_h1 = HumanState(2.0,4.0,1.0,Location(0.0,0.0))
-    unit_test_h2 = HumanState(3.0,3.0,1.0,Location(100.0,0.0))
-    unit_test_nearby_humans = HumanState[unit_test_h1,unit_test_h2]
-    # unit_test_nearby_humans = SVector{2,HumanState}(unit_test_h1,unit_test_h2)
+    unit_test_h1 = HumanState(10.0,10.0,1.0,Location(0.0,0.0))
+    unit_test_h2 = HumanState(10.0,10.0,1.0,Location(100.0,0.0))
+    # unit_test_h1 = HumanState(2.0,4.0,1.0,Location(0.0,0.0))
+    # unit_test_h2 = HumanState(3.0,3.0,1.0,Location(100.0,0.0))
+    # unit_test_nearby_humans = HumanState[unit_test_h1,unit_test_h2]
+    unit_test_nearby_humans = SVector{2,HumanState}(unit_test_h1,unit_test_h2)
     unit_test_es_planner_state = StateExtendedSpacePOMDP(2.0,2.0,0.0,1.0,unit_test_nearby_humans)
     unit_test_es_planner_action = ActionExtendedSpacePOMDP(pi/12,1.0)
     # unit_test_env = ExperimentEnvironment(100.0,100.0,SVector{0,ObstacleLocation}())
@@ -774,7 +795,7 @@ function calculate_lower_bound(m::ExtendedSpacePOMDP{HJBPolicy},b)
     end
     s = first(particles(b))
     safe_value_lim = 750.0
-    a::Float64, _ = reactive_policy(SVector(s.vehicle_x,s.vehicle_y,wrap_between_negative_pi_to_pi(s.vehicle_theta),s.vehicle_v),delta_speed,
+    a,q_vals = reactive_policy(SVector(s.vehicle_x,s.vehicle_y,wrap_between_negative_pi_to_pi(s.vehicle_theta),s.vehicle_v),delta_speed,
         safe_value_lim,m.rollout_guide.get_actions,m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,
         m.rollout_guide.value_array,m.rollout_guide.veh,m.rollout_guide.state_grid)
     if(debug)
