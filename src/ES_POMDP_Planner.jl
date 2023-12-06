@@ -30,27 +30,17 @@ end
 #=
 Struct for HJB policy
 =#
-struct HJBPolicy
+struct HJBPolicy{F1<:Function,F2<:Function}
     Dt::Float64
     value_array::Array{Float64,1}
     q_value_array::Array{Array{Float64,1},1}
-    get_actions::Function
-    get_cost::Function
+    get_actions::F1
+    get_cost::F2
     env::Environment
     veh::VehicleBody
     state_grid::StateGrid
 end
 
-# struct HJBPolicy{F1<:Function,F2<:Function}
-#     Dt::Float64
-#     value_array::Array{Float64,1}
-#     q_value_array::Array{Array{Float64,1},1}
-#     get_actions::F1
-#     get_cost::F2
-#     env::Environment
-#     veh::VehicleBody
-#     state_grid::StateGrid
-# end
 #=
 Struct for POMDP
 =#
@@ -654,7 +644,7 @@ function upper_bound_rollout_gen(m::ExtendedSpacePOMDP, x, a)
     return (sp=sp, r=r)
 end
 
-function calculate_upper_bound(m::ExtendedSpacePOMDP{HJBPolicy}, b)
+function calculate_upper_bound(m::ExtendedSpacePOMDP, b)
     # lower = lbound(DefaultPolicyLB(FunctionPolicy(b->calculate_lower_bound(m, b)),max_depth=pomdp_details.tree_search_max_depth),m,b)
     # println(lower)
     value_sum = 0.0
@@ -728,7 +718,7 @@ end
 ************************************************************************************************
 Lower bound policy function for DESPOT
 =#
-function calculate_lower_bound(m::ExtendedSpacePOMDP{HJBPolicy},b)
+function calculate_lower_bound(m::ExtendedSpacePOMDP,b)
     # println(typeof(b))
     #Implement a reactive controller for your lower bound
     delta_speed = m.vehicle_action_delta_speed
@@ -812,7 +802,7 @@ Action Function for the POMDP
 
 # ISSUE: need to modify steering angles with +/-Dv in here
 
-function get_actions(m::ExtendedSpacePOMDP{HJBPolicy},b)
+function get_actions(m::ExtendedSpacePOMDP,b)
     max_steering_angle = m.max_vehicle_steering_angle
     max_delta_angle = m.vehicle_action_max_delta_heading_angle
     delta_speed = m.vehicle_action_delta_speed
@@ -881,7 +871,7 @@ end
 
 discount(m::ExtendedSpacePOMDP) = m.discount_factor
 isterminal(m::ExtendedSpacePOMDP, s::StateExtendedSpacePOMDP) = is_terminal_state(s,Location(-100.0,-100.0));
-actions(m::ExtendedSpacePOMDP{HJBPolicy},b) = get_actions(m,b)
+actions(m::ExtendedSpacePOMDP,b) = get_actions(m,b)
 
 
 # function get_actions(m::ExtendedSpacePOMDP,b)

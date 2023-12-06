@@ -1,7 +1,7 @@
-struct NNewStateExtendedSpacePOMDP{V,M,N}
-    vehicle::V
-    nearby_humans::SVector{M,N}
-end
+# struct NNewStateExtendedSpacePOMDP{V,M,N}
+#     vehicle::V
+#     nearby_humans::SVector{M,N}
+# end
 
 struct TempVehicleState
     x::Float64
@@ -43,7 +43,6 @@ function new_update_vehicle_position(s::TempVehicleState, one_time_step::Float64
             vehicle_path[i] = vs
         end
     else
-        c = 1
         for i in 1:N
             v = TempVehicleState(current_x, current_y, current_theta,new_vehicle_speed)
             new_x,new_y,new_theta = move(v,(steering_angle,new_vehicle_speed),one_time_step/N)
@@ -51,11 +50,11 @@ function new_update_vehicle_position(s::TempVehicleState, one_time_step::Float64
             current_x,current_y,current_theta = new_x,new_y,new_theta
             vehicle_center_x = current_x + 1*cos(current_theta)
             vehicle_center_y = current_y + 1*cos(current_theta)
-            c+=1
             if(is_within_range(vehicle_center_x,vehicle_center_y,g.x,g.y,1.0) ||
                 vehicle_center_x<0.0+0.5 || vehicle_center_y<0.0+0.5 ||
                 vehicle_center_x>99.5 || vehicle_center_y>99.5 )
-                for j in i+1:10
+                for j in i+1:N
+                    # println("HG")
                     vehicle_path[j] = (current_x, current_y, current_theta)
                 end
                 return SVector{N,Tuple{Float64,Float64,Float64}}(vehicle_path)
@@ -67,7 +66,7 @@ function new_update_vehicle_position(s::TempVehicleState, one_time_step::Float64
     return SVector{N,Tuple{Float64,Float64,Float64}}(vehicle_path)
 end
 #=
-v= TempVehicleState()
+v= TempVehicleState(99.3,1.,0.,1.)
 @btime new_update_vehicle_position($v,1.0,0.0,0.0,Val(10))
 =#
 
@@ -82,9 +81,8 @@ function lala(s,a,::Val{N}) where N
         m[i] = ns
         cs = ns
         if(cs[3] > 10.2)
-            v = 9
-            for j in 1:N
-                v+=1
+            for j in i+1:N
+                m[j] = cs
             end
             return SVector(m)
         end
