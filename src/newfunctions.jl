@@ -10,7 +10,7 @@ struct TempVehicleState
     v::Float64
 end
 
-function move(vehicle::TempVehicleState,a::Tuple{Float64,Float64},time::Float64)::Tuple{Float64, Float64, Float64}
+function move2(vehicle::TempVehicleState,a::Tuple{Float64,Float64},time::Float64)
     current_x,current_y,current_theta = vehicle.x,vehicle.y,vehicle.θ
     steering_angle,speed = a
     vehicle_wheelbase = 1.0
@@ -45,7 +45,7 @@ function new_update_vehicle_position(s::TempVehicleState, one_time_step::Float64
     else
         for i in 1:N
             v = TempVehicleState(current_x, current_y, current_theta,new_vehicle_speed)
-            new_x,new_y,new_theta = move(v,(steering_angle,new_vehicle_speed),one_time_step/N)
+            new_x,new_y,new_theta = move2(v,(steering_angle,new_vehicle_speed),one_time_step/N)
             vehicle_path[i] = (new_x,new_y,new_theta)
             current_x,current_y,current_theta = new_x,new_y,new_theta
             vehicle_center_x = current_x + 1*cos(current_theta)
@@ -55,7 +55,7 @@ function new_update_vehicle_position(s::TempVehicleState, one_time_step::Float64
                 vehicle_center_x>99.5 || vehicle_center_y>99.5 )
                 for j in i+1:N
                     # println("HG")
-                    vehicle_path[j] = (current_x, current_y, current_theta)
+                    @inbounds vehicle_path[j] = (current_x, current_y, current_theta)
                 end
                 return SVector{N,Tuple{Float64,Float64,Float64}}(vehicle_path)
             end
@@ -85,7 +85,33 @@ function lala(s,a,::Val{N}) where N
                 m[j] = cs
             end
             return SVector(m)
+            return m
         end
     end
     return SVector(m)
+    return m
+end
+
+function lala2(s,a,::Val{N}) where N
+    m = Vector{Tuple{Float64,Float64,Float64}}(undef,10)
+    cs = s
+    m[1] = cs
+    # push!(m, cs)
+    for i in 2:N
+        ns = move(cs,a)
+        m[i] = ns
+        cs = ns
+        # push!(m, cs)
+        if(cs[3] > 10.2)
+            for j in i+1:N
+                m[j] = cs
+                # push!(m, cs)
+
+            end
+            # return SVector(m)
+            return m
+        end
+    end
+    # return SVector(m)
+    return m
 end
