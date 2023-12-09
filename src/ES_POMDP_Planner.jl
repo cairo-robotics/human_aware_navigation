@@ -30,15 +30,15 @@ end
 #=
 Struct for HJB policy
 =#
-struct HJBPolicy{F1<:Function,F2<:Function,P,Q}
+struct HJBPolicy{F1<:Function,F2<:Function,A,B,C,P,Q,M,N}
     Dt::Float64
     value_array::Array{Float64,1}
     q_value_array::Array{Array{Float64,1},1}
     get_actions::F1
     get_cost::F2
-    env::Environment
-    veh::VehicleBody
-    state_grid::StateGrid{P,Q}
+    env::Environment{A,B,C}
+    veh::VehicleBody{P,Q}
+    state_grid::StateGrid{M,N}
 end
 
 struct NewHJBPolicy

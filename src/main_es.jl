@@ -84,7 +84,7 @@ Dval_tol = 0.1
 HJB_planning_details = HJBPlanningDetails(Dt, max_solve_steps, Dval_tol, veh_params.max_steering_angle, veh_params.max_speed)
 policy_path = "/home/himanshu/Documents/Research/human_aware_navigation/src"
 solve_HJB = true
-# solve_HJB = false
+solve_HJB = false
 if(solve_HJB)
     println("Solving HJB equation for given environment ....")
     rollout_guide = HJBPolicy(HJB_planning_details, exp_details, veh_params);
@@ -101,7 +101,7 @@ Define POMDP, POMDP Solver and POMDP Planner
 extended_space_pomdp = ExtendedSpacePOMDP(pomdp_details,env,veh_params,rollout_guide);
 pomdp_solver = DESPOTSolver(bounds=IndependentBounds(DefaultPolicyLB(FunctionPolicy(b->calculate_lower_bound(extended_space_pomdp, b)),max_depth=pomdp_details.tree_search_max_depth),
                     calculate_upper_bound,check_terminal=true,consistency_fix_thresh=1e-5),K=pomdp_details.num_scenarios,D=pomdp_details.tree_search_max_depth,
-                    T_max=0.5,tree_in_info=true);#,default_action=default_es_pomdp_action)
+                    max_trials=10,tree_in_info=true);#,default_action=default_es_pomdp_action)
 pomdp_planner = POMDPs.solve(pomdp_solver, extended_space_pomdp);
 
 #=
