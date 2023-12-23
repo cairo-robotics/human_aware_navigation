@@ -662,9 +662,13 @@ function calculate_upper_bound(m::ExtendedSpacePOMDP, b)
     else
         s = first(particles(b))
         x = SVector(s.vehicle_x, s.vehicle_y, s.vehicle_theta, s.vehicle_v)
-        a, q_vals = HJB_policy(SVector(x[1],x[2],wrap_between_negative_pi_to_pi(x[3]),x[4]),0.5,750.0,m.rollout_guide.get_actions,
+        # a, q_vals = HJB_policy(SVector(x[1],x[2],wrap_between_negative_pi_to_pi(x[3]),x[4]),0.5,750.0,m.rollout_guide.get_actions,
+        #             m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,m.rollout_guide.value_array,m.rollout_guide.veh,
+        #             m.rollout_guide.state_grid)
+        a= better_HJB_policy(SVector(x[1],x[2],wrap_between_negative_pi_to_pi(x[3]),x[4]),0.5,m.rollout_guide.get_actions,
                     m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,m.rollout_guide.value_array,m.rollout_guide.veh,
                     m.rollout_guide.state_grid)
+
         i = 0
         # println(x)
         while(x[1]!= -100.0 && b.depth+i <100)
@@ -674,7 +678,10 @@ function calculate_upper_bound(m::ExtendedSpacePOMDP, b)
             new_x, r =  upper_bound_rollout_gen(m, x, a)
             value_sum += r
             x = new_x
-            a, q_vals = HJB_policy(SVector(x[1],x[2],wrap_between_negative_pi_to_pi(x[3]),x[4]),0.5,750.0,m.rollout_guide.get_actions,
+            # a, q_vals = HJB_policy(SVector(x[1],x[2],wrap_between_negative_pi_to_pi(x[3]),x[4]),0.5,750.0,m.rollout_guide.get_actions,
+            #             m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,m.rollout_guide.value_array,m.rollout_guide.veh,
+            #             m.rollout_guide.state_grid)
+            a = better_HJB_policy(SVector(x[1],x[2],wrap_between_negative_pi_to_pi(x[3]),x[4]),0.5,m.rollout_guide.get_actions,
                         m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,m.rollout_guide.value_array,m.rollout_guide.veh,
                         m.rollout_guide.state_grid)
 
