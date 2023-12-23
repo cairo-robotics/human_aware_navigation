@@ -5,7 +5,7 @@ small_obstacles_20x20 =  InputParameters(
     20.0, #=env_breadth::Float64=#
     ObstacleLocation[ObstacleLocation(5.125,4.875,1.125), ObstacleLocation(6.5,15.25,1.5),
                         ObstacleLocation(16.25,11.0,1.125), ObstacleLocation(10.0,9.5,2.25) ], #=obstacles::Array{obstacle_location,1}=#
-    25, #=num_humans_env::Int64=#
+    15, #=num_humans_env::Int64=#
     1.0, #=human_start_v::Float64=#
     10.0, #=veh_start_x::Float64=#
     2.0, #=veh_start_y::Float64=#
@@ -34,7 +34,7 @@ small_obstacles_20x20 =  InputParameters(
     10, #=num_segments_in_one_time_step::Int64=#
     1.0, #=observation_discretization_length::Float64=#
     100, #=tree_search_max_depth::Int64=#
-    1, #=num_scenarios::Int64=#
+    50, #=num_scenarios::Int64=#
     2.0, #=d_near::Float64 = 0.5=#
     4.0, #=d_far::Float64 = 0.5=#
     0.4, #=es_pomdp_planning_time::Float64=#
@@ -45,5 +45,5 @@ small_obstacles_20x20 =  InputParameters(
     0.1, #=simulator_time_step::Float64=#
     0.1, #=update_sensor_data_time_interval::Float64=#
     0.1, #=buffer_time::Float64=#
-    20.0 #=MAX_TIME_LIMIT::Float64=#
+    30.0 #=MAX_TIME_LIMIT::Float64=#
 )

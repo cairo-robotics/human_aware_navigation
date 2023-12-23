@@ -349,7 +349,7 @@ function run_experiment!(current_sim_obj::NavigationSimulator{VehicleParametersE
 
             # return info
 
-            if(current_time_value > 25.0)
+            if(current_time_value > 30.0)
                 return info
             end
             if(debug)

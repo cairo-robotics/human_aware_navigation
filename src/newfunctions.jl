@@ -56,6 +56,7 @@ function new_update_vehicle_position(s::TempVehicleState, one_time_step::Float64
                 for j in i+1:N
                     # println("HG")
                     @inbounds vehicle_path[j] = (current_x, current_y, current_theta)
+                    # vehicle_path[j] = (current_x, current_y, current_theta)
                 end
                 return SVector{N,Tuple{Float64,Float64,Float64}}(vehicle_path)
             end
@@ -68,6 +69,7 @@ end
 #=
 v= TempVehicleState(99.3,1.,0.,1.)
 @btime new_update_vehicle_position($v,1.0,0.0,0.0,Val(10))
+@benchmark new_update_vehicle_position($v,1.0,0.0,0.0,Val(10))
 =#
 
 move(s::Tuple{Float64,Float64,Float64}, a::Tuple{Float64,Float64}) = (s[1]+a[1],s[2]+a[2],s[1]*s[2])
