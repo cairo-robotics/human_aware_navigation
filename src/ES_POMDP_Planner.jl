@@ -53,7 +53,7 @@ end
 #=
 Struct for POMDP
 =#
-struct ExtendedSpacePOMDP{P} <: POMDPs.POMDP{StateExtendedSpacePOMDP,ActionExtendedSpacePOMDP,Array{Location,1}}
+struct ExtendedSpacePOMDP{P,N} <: POMDPs.POMDP{StateExtendedSpacePOMDP,ActionExtendedSpacePOMDP,Array{Location,1}}
     discount_factor::Float64
     min_safe_distance_from_human::Float64
     human_collision_penalty::Float64
@@ -76,11 +76,13 @@ struct ExtendedSpacePOMDP{P} <: POMDPs.POMDP{StateExtendedSpacePOMDP,ActionExten
     observation_discretization_length::Float64
     d_near::Float64
     d_far::Float64
+    sudden_break_flag::Bool
     world::ExperimentEnvironment
+    vehicle_path_cache::MVector{N, Tuple{Float64,Float64,Float64}}
     rollout_guide::P
 end
 
-function ExtendedSpacePOMDP(pomdp_details,env,vehicle_params,rollout_guide)
+function ExtendedSpacePOMDP(pomdp_details,env,vehicle_params,rollout_guide,sudden_break_flag)
 
     return ExtendedSpacePOMDP(
         pomdp_details.discount_factor,
@@ -105,7 +107,9 @@ function ExtendedSpacePOMDP(pomdp_details,env,vehicle_params,rollout_guide)
         pomdp_details.observation_discretization_length,
         pomdp_details.d_near,
         pomdp_details.d_far,
+        sudden_break_flag,
         env,
+        MVector{pomdp_details.num_segments_in_one_time_step+1,Tuple{Float64,Float64,Float64}}(undef),
         rollout_guide
         )
 end
@@ -127,7 +131,7 @@ end
 ************************************************************************************************
 Simulate the vehicle one step forward in POMDP planning
 =#
-function update_vehicle_position(s, m::ExtendedSpacePOMDP, steering_angle, new_vehicle_speed)
+function update_vehicle_position(m::ExtendedSpacePOMDP, s, steering_angle, new_vehicle_speed)
 
     current_x, current_y, current_theta = s.vehicle_x, s.vehicle_y, s.vehicle_theta
     if(new_vehicle_speed == 0.0)
@@ -191,20 +195,100 @@ function testUV(s,unit_test_es_pomdp)
 end
 =#
 
+function move(vehicle::Tuple{Float64,Float64,Float64},a::Tuple{Float64,Float64},time,vehicle_wheelbase)
+    current_x,current_y,current_theta = vehicle
+    steering_angle,speed = a
+    # vehicle_wheelbase = 1.0
+
+    if(steering_angle == 0.0)
+        new_theta = current_theta
+        new_x = current_x + speed*cos(current_theta)*time
+        new_y = current_y + speed*sin(current_theta)*time
+    else
+        new_theta = current_theta + (speed * tan(steering_angle) * (time) / vehicle_wheelbase)
+        new_theta = wrap_between_0_and_2Pi(new_theta)
+        new_x = current_x + ((vehicle_wheelbase / tan(steering_angle)) * (sin(new_theta) - sin(current_theta)))
+        new_y = current_y + ((vehicle_wheelbase / tan(steering_angle)) * (cos(current_theta) - cos(new_theta)))
+    end
+    return (new_x,new_y,new_theta)
+end
+
+function better_update_vehicle_position(m::ExtendedSpacePOMDP, s, steering_angle, new_vehicle_speed, ::Val{N}) where N
+    current_x, current_y, current_theta = s.vehicle_x, s.vehicle_y, s.vehicle_theta
+    curr_vehicle = (current_x, current_y, current_theta)
+    vehicle_path = MVector{N+1,Tuple{Float64,Float64,Float64}}(undef)
+    @inbounds vehicle_path[1] = curr_vehicle
+
+    if(new_vehicle_speed == 0.0)
+        for i in 2:N+1
+            @inbounds vehicle_path[i] = curr_vehicle
+        end
+    else
+        for i in 2:N+1
+            new_x,new_y,new_theta = move(curr_vehicle,(steering_angle,new_vehicle_speed),m.one_time_step/N,m.vehicle_wheelbase)
+            @inbounds vehicle_path[i] = (new_x,new_y,new_theta)
+            current_x,current_y,current_theta = new_x,new_y,new_theta
+            curr_vehicle = (current_x, current_y, current_theta)
+            vehicle_center_x = current_x + m.vehicle_D*cos(current_theta)
+            vehicle_center_y = current_y + m.vehicle_D*cos(current_theta)
+            if(is_within_range(vehicle_center_x,vehicle_center_y,m.vehicle_goal.x,m.vehicle_goal.y,m.radius_around_vehicle_goal))
+                for j in i+1:N
+                    @inbounds vehicle_path[j] = (current_x, current_y, current_theta)
+                end
+                return SVector{N+1,Tuple{Float64,Float64,Float64}}(vehicle_path)
+            end
+            if( vehicle_center_x<0.0+m.vehicle_R || vehicle_center_y<0.0+m.vehicle_R || vehicle_center_x>m.world.length-m.vehicle_R || vehicle_center_y>m.world.breadth-m.vehicle_R )
+                for j in i+1:N
+                    @inbounds vehicle_path[j] = (current_x, current_y, current_theta)
+                end
+                return SVector{N+1,Tuple{Float64,Float64,Float64}}(vehicle_path)
+            end
+        end
+    end
+    return SVector{N+1,Tuple{Float64,Float64,Float64}}(vehicle_path)
+end
+
+function even_better_update_vehicle_position(m::ExtendedSpacePOMDP, s, steering_angle, new_vehicle_speed)
+    current_x, current_y, current_theta = s.vehicle_x, s.vehicle_y, s.vehicle_theta
+    curr_vehicle = (current_x, current_y, current_theta)
+    N = m.num_segments_in_one_time_step
+    vehicle_path = m.vehicle_path_cache
+    vehicle_path[1] = curr_vehicle
+
+    if(new_vehicle_speed == 0.0)
+        for i in 2:N+1
+            vehicle_path[i] = curr_vehicle
+        end
+    else
+        for i in 2:N+1
+            new_x,new_y,new_theta = move(curr_vehicle,(steering_angle,new_vehicle_speed),m.one_time_step/N,m.vehicle_wheelbase)
+            @inbounds vehicle_path[i] = (new_x,new_y,new_theta)
+            current_x,current_y,current_theta = new_x,new_y,new_theta
+            curr_vehicle = (current_x, current_y, current_theta)
+            vehicle_center_x = current_x + m.vehicle_D*cos(current_theta)
+            vehicle_center_y = current_y + m.vehicle_D*cos(current_theta)
+            if(is_within_range(vehicle_center_x,vehicle_center_y,m.vehicle_goal.x,m.vehicle_goal.y,m.radius_around_vehicle_goal))
+                for j in i+1:N
+                    @inbounds vehicle_path[j] = (current_x, current_y, current_theta)
+                end
+                # return SVector{N+1,Tuple{Float64,Float64,Float64}}(vehicle_path)
+            end
+            if( vehicle_center_x<0.0+m.vehicle_R || vehicle_center_y<0.0+m.vehicle_R ||
+                vehicle_center_x>m.world.length-m.vehicle_R || vehicle_center_y>m.world.breadth-m.vehicle_R )
+                for j in i+1:N
+                    @inbounds vehicle_path[j] = (current_x, current_y, current_theta)
+                end
+                # return SVector{N+1,Tuple{Float64,Float64,Float64}}(vehicle_path)
+            end
+        end
+    end
+    # return SVector{N+1,Tuple{Float64,Float64,Float64}}(vehicle_path)
+end
 
 #=
 ************************************************************************************************
 POMDP Generative Model
 =#
-#parent = Dict()
-
-# function POMDPs.gen(m::Tuple{Int64,Int64},s,a,rng)
-#     return 1
-# end
-#
-# function WTF(m::Tuple{Int64,Int64},s,a,rng)
-#     return 1
-# end
 
 function POMDPs.gen(m::ExtendedSpacePOMDP, s, a, rng)
 
@@ -262,8 +346,7 @@ function POMDPs.gen(m::ExtendedSpacePOMDP, s, a, rng)
             end
         end
     end
-    # println("Success")
-    # return 11
+
     for obstacle in m.world.obstacles
         if( is_within_range(vehicle_center_x,vehicle_center_y,obstacle.x,obstacle.y,obstacle.r+m.min_safe_distance_from_obstacle+m.vehicle_R) )
             # println("Collision with this obstacle " ,obstacle)
@@ -278,6 +361,8 @@ function POMDPs.gen(m::ExtendedSpacePOMDP, s, a, rng)
 
     if( vehicle_center_x<0.0+m.vehicle_R || vehicle_center_y<0.0+m.vehicle_R || vehicle_center_x>m.world.length-m.vehicle_R || vehicle_center_y>m.world.breadth-m.vehicle_R )
         # println("Running into boundary wall")
+        # println(s.vehicle_x," ",s.vehicle_y," ",s.vehicle_theta*180/pi," ",s.vehicle_v)
+        # println(vehicle_center_x," ",vehicle_center_y," ",s.vehicle_theta*180/pi," ",s.vehicle_v)
         new_vehicle_position = (-100.0, -100.0, -100.0)
         collision_with_obstacle = true
         observed_positions = Location[ Location(-50.0,-50.0) ]
@@ -306,8 +391,11 @@ function POMDPs.gen(m::ExtendedSpacePOMDP, s, a, rng)
     new_vehicle_speed = clamp(s.vehicle_v + a.delta_speed, 0.0, m.max_vehicle_speed)
     # steering_angle = get_steering_angle(m.vehicle_L, a.delta_heading_angle, new_vehicle_speed, m.one_time_step)
     steering_angle = a.steering_angle
-    vehicle_path = update_vehicle_position(s, m, steering_angle, new_vehicle_speed)
-    new_vehicle_position = vehicle_path[end]
+    # vehicle_path = better_update_vehicle_position(m, s, steering_angle, new_vehicle_speed, Val(m.num_segments_in_one_time_step))
+    # vehicle_path = update_vehicle_position(m, s, steering_angle, new_vehicle_speed)
+    even_better_update_vehicle_position(m, s, steering_angle, new_vehicle_speed)
+    vehicle_path = m.vehicle_path_cache
+    new_vehicle_position = vehicle_path[m.num_segments_in_one_time_step+1]
 
     for human in s.nearby_humans
         scaling_factor_for_noise = 0.2
@@ -402,11 +490,6 @@ function POMDPs.gen(m::ExtendedSpacePOMDP, s, a, rng)
     r += -1.0
     # println(r)
 
-    # if( sp.vehicle_x<0.0+sp.vehicle_L || sp.vehicle_y<0.0+sp.vehicle_L || sp.vehicle_x>m.world.length-sp.vehicle_L || sp.vehicle_y>m.world.breadth-sp.vehicle_L )
-    #     println(s)
-    #     println(sp)
-    #     println(r)
-    # end
     # println(s)
     # println(sp)
     # println(r)
@@ -457,11 +540,11 @@ function is_collision_state(s::StateExtendedSpacePOMDP,m::ExtendedSpacePOMDP)
 end
 
 #This is not accurate for HV or NHV, especially when static obstacles are present. Can we get a better and tighter upper bound?
-function time_to_goal(s::StateExtendedSpacePOMDP,m::ExtendedSpacePOMDP{HJBPolicy})
+function time_to_goal(s::StateExtendedSpacePOMDP,m::ExtendedSpacePOMDP)
     vehicle_distance_to_goal = sqrt( (s.vehicle_x-m.vehicle_goal.x)^2 + (s.vehicle_y-m.vehicle_goal.y)^2 )
     # println("Distance is :", vehicle_distance_to_goal)
     # println(s)
-    # println("Time is :", floor(vehicle_distance_to_goal/max_vehicle_speed))
+    # println("Time is :", floor(vehicle_distance_to_goal/m.max_vehicle_speed))
     # return floor(vehicle_distance_to_goal/m.max_vehicle_speed/m.one_time_step)
     return floor(vehicle_distance_to_goal/m.max_vehicle_speed)
 end
@@ -477,38 +560,48 @@ end
 #     return steps_to_goal
 # end
 
-# function calculate_upper_bound(m::ExtendedSpacePOMDP{HJBPolicy}, b)
-#
-#     # lower = lbound(DefaultPolicyLB(FunctionPolicy(b->calculate_lower_bound(extended_space_pomdp, b)),max_depth=100),m,b)
-#     # lower = lbound(DefaultPolicyLB(FunctionPolicy(b->calculate_lower_bound(m, b)),max_depth=pomdp_details.tree_search_max_depth),m,b)
-#     value_sum = 0.0
-#     if(b.depth == 100)
-#         return value_sum
-#     else
-#         for (s, w) in weighted_particles(b)
-#             if(s.vehicle_x == -100.0 && s.vehicle_y == -100.0)
-#                 value_sum += 0.0
-#             elseif(is_collision_state(s,m))
-#                 value_sum += w*m.human_collision_penalty
-#                 # println("Upper bound PB is :", value_sum)
-#             elseif(is_within_range(s.vehicle_x,s.vehicle_y, m.vehicle_goal.x, m.vehicle_goal.y, m.radius_around_vehicle_goal))
-#                 value_sum += w*m.goal_reached_reward
-#                 # println("Upper bound PA is :", value_sum)
-#             else
-#                 value_sum += w*((discount(m)^time_to_goal(s,m))*m.goal_reached_reward)
-#                 # println("Upper bound PC is :", value_sum)
-#             end
-#         end
-#     end
-#     # println("Upper bound is :", value_sum)
-#     # u = (value_sum)/weight_sum(b)
-#     # if lower > value_sum
-#     #     push!(bad, (lower,value_sum,b))
-#     #     @show("While debugging ",lower,value_sum,b.depth)
-#     # end
-#     return value_sum
-# end
+function old_calculate_upper_bound(m::ExtendedSpacePOMDP, b)
+
+    # lower = lbound(DefaultPolicyLB(FunctionPolicy(b->calculate_lower_bound(extended_space_pomdp, b)),max_depth=100),m,b)
+    # lower = lbound(DefaultPolicyLB(FunctionPolicy(b->calculate_lower_bound(m, b)),max_depth=pomdp_details.tree_search_max_depth),m,b)
+    value_sum = 0.0
+    debug = false
+    for (s, w) in weighted_particles(b)
+        if(s.vehicle_x == -100.0 && s.vehicle_y == -100.0)
+            value_sum += 0.0
+        elseif(is_collision_state(s,m))
+            value_sum += w*m.human_collision_penalty
+            if(debug)
+                println("Upper bound PB is :", value_sum)
+            end
+        elseif(is_within_range(s.vehicle_x,s.vehicle_y, m.vehicle_goal.x, m.vehicle_goal.y, m.radius_around_vehicle_goal))
+            value_sum += w*m.goal_reached_reward
+            if(debug)
+                println("Upper bound PA is :", value_sum)
+            end
+        else
+            value_sum += w*((discount(m)^time_to_goal(s,m))*m.goal_reached_reward)
+            if(debug)
+                println("Upper bound PC is :", value_sum)
+            end
+        end
+    end
+    # println("Upper bound is :", value_sum)
+    # u = (value_sum)/weight_sum(b)
+    # if lower > value_sum
+    #     push!(bad, (lower,value_sum,b))
+    #     @show("While debugging ",lower,value_sum,b.depth)
+    # end
+    return value_sum
+end
 # @code_warntype calculate_upper_bound_value(golfcart_pomdp(), initialstate_distribution(golfcart_pomdp()))
+#=
+b = output.b_root[16.0]
+s = rand(b)
+root_scenarios = [i=>s for i in 1:50];
+belief = ScenarioBelief(root_scenarios,pomdp_planner.rs, 1, missing);
+old_calculate_upper_bound(extended_space_pomdp,belief)
+=#
 
 # function calculate_upper_bound(m::ExtendedSpacePOMDP{HJBPolicy}, b)
 #
@@ -564,9 +657,9 @@ function upper_bound_rollout_gen(m::ExtendedSpacePOMDP, x, a)
     vehicle_center_y = x[2] + m.vehicle_D*sin(x[3])
     for obstacle in m.world.obstacles
         if( is_within_range(vehicle_center_x,vehicle_center_y,obstacle.x,obstacle.y,obstacle.r+m.min_safe_distance_from_obstacle+m.vehicle_R) )
-            # println("Collision with this obstacle " ,obstacle)
-            # println(x)
-            # println(vehicle_center_x, vehicle_center_y)
+            println("Collision with this obstacle " ,obstacle)
+            println(x)
+            println(vehicle_center_x, " ", vehicle_center_y)
             new_vehicle_position = (-100.0, -100.0, -100.0)
             collision_with_obstacle = true
             sp = SVector(new_vehicle_position[1],new_vehicle_position[2],new_vehicle_position[3],x[4])
@@ -581,8 +674,6 @@ function upper_bound_rollout_gen(m::ExtendedSpacePOMDP, x, a)
         collision_with_obstacle = true
         sp = SVector(new_vehicle_position[1],new_vehicle_position[2],new_vehicle_position[3],x[4])
         r = obstacle_collision_penalty(collision_with_obstacle, m.obstacle_collision_penalty)
-        # println(s)
-        # println(r)
         return (sp=sp, r=r)
     end
 
@@ -600,8 +691,13 @@ function upper_bound_rollout_gen(m::ExtendedSpacePOMDP, x, a)
     end
     new_vehicle_speed = clamp(x[4] + a[2], 0.0, m.max_vehicle_speed)
     steering_angle = a[1]
-    vehicle_path = update_vehicle_position(StateExtendedSpacePOMDP(x[1],x[2],x[3],x[4],HumanState[]), m, steering_angle, new_vehicle_speed)
-    new_vehicle_position = vehicle_path[end]
+
+    # vehicle_path = update_vehicle_position(m, StateExtendedSpacePOMDP(x[1],x[2],x[3],x[4],HumanState[]), steering_angle, new_vehicle_speed)
+    # new_vehicle_position = vehicle_path[end]
+    s = StateExtendedSpacePOMDP(x[1],x[2],x[3],x[4],HumanState[])
+    even_better_update_vehicle_position(m, s, steering_angle, new_vehicle_speed)
+    vehicle_path = m.vehicle_path_cache
+    new_vehicle_position = vehicle_path[m.num_segments_in_one_time_step+1]
 
     if(new_vehicle_speed!=0.0)
         for time_index in 2:m.num_segments_in_one_time_step+1
@@ -697,18 +793,25 @@ function calculate_upper_bound(m::ExtendedSpacePOMDP, b)
     return clamp(value_sum,-100.0,Inf)
 end
 
-function calculate_upper_bound_x(m::ExtendedSpacePOMDP{HJBPolicy}, x_stop)
+function calculate_upper_bound_x(m::ExtendedSpacePOMDP, x_stop)
     value_sum = 0.0
-
+    # debug = true
+    debug = false
     # println("UBx: x_stop = ", x_stop)
-
     x = SVector(x_stop[1], x_stop[2], wrap_between_0_to_2pi(x_stop[3]), 0.0)
 
-    # println("UBx: x = ", x)
+    # a, q_vals = HJB_policy(SVector(x[1],x[2],wrap_between_negative_pi_to_pi(x[3]),x[4]), 0.5, 750.0, m.rollout_guide.get_actions,
+    #             m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,m.rollout_guide.value_array,m.rollout_guide.veh,
+    #             m.rollout_guide.state_grid)
 
-    a, q_vals = HJB_policy(SVector(x[1],x[2],wrap_between_negative_pi_to_pi(x[3]),x[4]), 0.5, 750.0, m.rollout_guide.get_actions,
+    a = better_HJB_policy(SVector(x[1],x[2],wrap_between_negative_pi_to_pi(x[3]),x[4]),0.5,m.rollout_guide.get_actions,
                 m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,m.rollout_guide.value_array,m.rollout_guide.veh,
                 m.rollout_guide.state_grid)
+
+    if(debug)
+        println("Starting state : ", x)
+        println("Starting action : ", a)
+    end
 
     i = 0
     while(x[1] != -100.0 && i < 100)
@@ -716,14 +819,23 @@ function calculate_upper_bound_x(m::ExtendedSpacePOMDP{HJBPolicy}, x_stop)
         new_x, r = upper_bound_rollout_gen(m, x, a)
         value_sum += r
 
+        if(debug)
+            println("Next state : ", new_x)
+            println("Current reward : ", r)
+        end
+
         # pass x to next time step, get next action from policy
         x = new_x
-        a, q_vals = HJB_policy(SVector(x[1],x[2],wrap_between_negative_pi_to_pi(x[3]),x[4]), 0.5, 750.0, m.rollout_guide.get_actions,
+        # a, q_vals = HJB_policy(SVector(x[1],x[2],wrap_between_negative_pi_to_pi(x[3]),x[4]), 0.5, 750.0, m.rollout_guide.get_actions,
+        #             m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,m.rollout_guide.value_array,m.rollout_guide.veh,
+        #             m.rollout_guide.state_grid)
+        a = better_HJB_policy(SVector(x[1],x[2],wrap_between_negative_pi_to_pi(x[3]),x[4]),0.5,m.rollout_guide.get_actions,
                     m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,m.rollout_guide.value_array,m.rollout_guide.veh,
                     m.rollout_guide.state_grid)
 
-        # println("UBx: x = ", x)
-
+        if(debug)
+            println("Next action : ", a)
+        end
         i+=1
     end
 
@@ -735,28 +847,28 @@ end
 Lower bound policy function for DESPOT
 =#
 function calculate_lower_bound(m::ExtendedSpacePOMDP,b)
-    # println(typeof(b))
     #Implement a reactive controller for your lower bound
+    #=
+    Predict the vehicle position forward at same speed and after increasing the speed.
+    If there is a collision of the predicted position with any human, return the SB action.
+    If not, move according to the usual reactive controller policy.
+    =#
     delta_speed = m.vehicle_action_delta_speed
 
     #This bool is also used to check if all the states in the belief are terminal or not.
     first_execution_flag = true
     # if(length(b.scenarios)==1)
-        # println("Tree Depth : ", b.depth)
+    #     println("Tree Depth : ", b.depth)
     #     println(b.scenarios)
     # end
+    debug = true
     debug = false
     if(debug)
         fp = first(particles(b))
         println([fp.vehicle_x,fp.vehicle_y,fp.vehicle_theta,fp.vehicle_v])
     end
     for (s, w) in weighted_particles(b)
-        if(s==nothing)
-            println(b)
-        end
-        # println(s.vehicle_x)
         if(s.vehicle_x == -100.0 && s.vehicle_y == -100.0)
-            # println("HG")
             continue
         else
             if(first_execution_flag)
@@ -765,14 +877,31 @@ function calculate_lower_bound(m::ExtendedSpacePOMDP,b)
             dist_to_closest_human = 20000.0  #Some really big infeasible number (not Inf to avoid the type mismatch error)
             for human in s.nearby_humans
                 euclidean_distance = sqrt((s.vehicle_x - human.x)^2 + (s.vehicle_y - human.y)^2)
+                if(debug)
+                    # println(euclidean_distance)
+                end
                 if(euclidean_distance < dist_to_closest_human)
                     dist_to_closest_human = euclidean_distance
                 end
+                # if(dist_to_closest_human < 2.0)
+                # if(dist_to_closest_human < 3.2)
+                #     # return ActionExtendedSpacePOMDP(-10.0,-10.0)
+                #     if(s.vehicle_v > m.vehicle_action_delta_speed)
+                #         return ActionExtendedSpacePOMDP(-10.0,-10.0)
+                #     elseif(s.vehicle_v == m.vehicle_action_delta_speed)
+                #         return ActionExtendedSpacePOMDP(0.0,-delta_speed)
+                #     else
+                #         return ActionExtendedSpacePOMDP(0.0,0.0)
+                #     end
+                # end
                 if(dist_to_closest_human < m.d_near)
+                # if(dist_to_closest_human < 5.0)
+                    # return ActionExtendedSpacePOMDP(-10.0,-10.0)
                     delta_speed = -delta_speed
                     safe_value_lim = 750.0
-                    a = better_reactive_policy(SVector(s.vehicle_x,s.vehicle_y,wrap_between_negative_pi_to_pi(s.vehicle_theta),s.vehicle_v),delta_speed,
-                        safe_value_lim,m.rollout_guide.get_actions,m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,
+                    a = better_reactive_policy(SVector(s.vehicle_x,s.vehicle_y,wrap_between_negative_pi_to_pi(s.vehicle_theta),s.vehicle_v),
+                        delta_speed,safe_value_lim,m.rollout_guide.get_actions,
+                        m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,
                         m.rollout_guide.value_array,m.rollout_guide.veh,m.rollout_guide.state_grid)
                     if(debug)
                         println("Near a Human")
@@ -782,9 +911,14 @@ function calculate_lower_bound(m::ExtendedSpacePOMDP,b)
                 end
             end
             if(dist_to_closest_human > m.d_far)
+            # if(dist_to_closest_human > 10.0)
                 chosen_delta_speed = m.vehicle_action_delta_speed
             else
-                chosen_delta_speed = 0.0
+                if(s.vehicle_v == 0.0)
+                    chosen_delta_speed = delta_speed
+                else
+                    chosen_delta_speed = 0.0
+                end
             end
             if(chosen_delta_speed < delta_speed)
                 delta_speed = chosen_delta_speed
@@ -795,6 +929,7 @@ function calculate_lower_bound(m::ExtendedSpacePOMDP,b)
     #This condition is true only when all the states in the belief are terminal. In that case, just return (0.0,0.0)
     if(first_execution_flag)
         if(debug)
+            println("All are terminal")
             println(ActionExtendedSpacePOMDP(0.0,0.0))
         end
         return ActionExtendedSpacePOMDP(0.0,0.0)
@@ -816,9 +951,103 @@ end
 Action Function for the POMDP
 =#
 
-# ISSUE: need to modify steering angles with +/-Dv in here
+function get_actions_without_SB_HJB_rollout(m::ExtendedSpacePOMDP,b)
+    max_steering_angle = m.max_vehicle_steering_angle
+    max_delta_angle = m.vehicle_action_max_delta_heading_angle
+    delta_speed = m.vehicle_action_delta_speed
+    pomdp_state = first(particles(b))
+    if(pomdp_state.vehicle_v == 0.0)
+        steering_angle = clamp(get_steering_angle(m.vehicle_wheelbase,max_delta_angle,delta_speed,m.one_time_step),0.0,max_steering_angle)
+        return (ActionExtendedSpacePOMDP(-steering_angle,delta_speed),
+                ActionExtendedSpacePOMDP(-2*steering_angle/3,delta_speed),
+                ActionExtendedSpacePOMDP(-steering_angle/3,delta_speed),
+                ActionExtendedSpacePOMDP(0.0,delta_speed),
+                ActionExtendedSpacePOMDP(0.0,0.0),
+                ActionExtendedSpacePOMDP(steering_angle/3,delta_speed),
+                ActionExtendedSpacePOMDP(2*steering_angle/3,delta_speed),
+                ActionExtendedSpacePOMDP(steering_angle,delta_speed)
+                )
+    elseif(pomdp_state.vehicle_v == m.max_vehicle_speed)
+        steering_angle = clamp(get_steering_angle(m.vehicle_wheelbase,max_delta_angle,pomdp_state.vehicle_v,m.one_time_step),
+                                0.0,max_steering_angle)
+        steering_angle_n = clamp(get_steering_angle(m.vehicle_wheelbase, max_delta_angle, pomdp_state.vehicle_v-delta_speed, m.one_time_step),
+                                0.0,max_steering_angle)
+        rollout_action = better_reactive_policy(SVector(pomdp_state.vehicle_x,pomdp_state.vehicle_y,wrap_between_negative_pi_to_pi(pomdp_state.vehicle_theta),pomdp_state.vehicle_v),
+                                delta_speed,750.0,m.rollout_guide.get_actions, m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,
+                                m.rollout_guide.value_array,m.rollout_guide.veh,m.rollout_guide.state_grid)
+        if( rollout_action[2] == -delta_speed &&
+            (rollout_action[1]!=0.0 || rollout_action[1]!=steering_angle_n || rollout_action[1]!=-steering_angle_n) )
+            return (
+                    ActionExtendedSpacePOMDP(-steering_angle,0.0),
+                    ActionExtendedSpacePOMDP(-2*steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(-steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(0.0,-delta_speed),
+                    ActionExtendedSpacePOMDP(0.0,0.0),
+                    ActionExtendedSpacePOMDP(steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(2*steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(steering_angle,0.0),
+                    ActionExtendedSpacePOMDP(rollout_action[1],rollout_action[2]),
+                    ActionExtendedSpacePOMDP(steering_angle_n,-delta_speed),
+                    ActionExtendedSpacePOMDP(-steering_angle_n,-delta_speed),
+                    )
+        else
+            return (
+                    ActionExtendedSpacePOMDP(-steering_angle,0.0),
+                    ActionExtendedSpacePOMDP(-2*steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(-steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(0.0,-delta_speed),
+                    ActionExtendedSpacePOMDP(0.0,0.0),
+                    ActionExtendedSpacePOMDP(steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(2*steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(steering_angle,0.0),
+                    ActionExtendedSpacePOMDP(steering_angle_n,-delta_speed),
+                    ActionExtendedSpacePOMDP(-steering_angle_n,-delta_speed),
+                    )
+        end
+    else
+        steering_angle = clamp(get_steering_angle(m.vehicle_wheelbase,max_delta_angle,pomdp_state.vehicle_v,m.one_time_step),
+                            0.0,max_steering_angle)
+        steering_angle_n = clamp(get_steering_angle(m.vehicle_wheelbase, max_delta_angle, pomdp_state.vehicle_v-delta_speed, m.one_time_step),
+                            0.0, max_steering_angle)
+        rollout_action = better_reactive_policy(SVector(pomdp_state.vehicle_x,pomdp_state.vehicle_y,wrap_between_negative_pi_to_pi(pomdp_state.vehicle_theta),pomdp_state.vehicle_v),
+                                delta_speed,750.0,m.rollout_guide.get_actions, m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,
+                                m.rollout_guide.value_array,m.rollout_guide.veh,m.rollout_guide.state_grid)
+        if(
+                ( rollout_action[2] == -delta_speed && (rollout_action[1] != steering_angle_n
+                    || rollout_action[1] != -steering_angle_n) || rollout_action[1] != 0.0 ) ||
+                ( rollout_action[2] == delta_speed && rollout_action[1] != 0.0 )
+            )
+            return (ActionExtendedSpacePOMDP(-steering_angle,0.0),
+                    ActionExtendedSpacePOMDP(-2*steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(-steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(0.0,-delta_speed),
+                    ActionExtendedSpacePOMDP(0.0,0.0),
+                    ActionExtendedSpacePOMDP(0.0,delta_speed),
+                    ActionExtendedSpacePOMDP(steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(2*steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(steering_angle,0.0),
+                    ActionExtendedSpacePOMDP(rollout_action[1],rollout_action[2]),
+                    ActionExtendedSpacePOMDP(steering_angle_n,-delta_speed),
+                    ActionExtendedSpacePOMDP(-steering_angle_n,-delta_speed),
+                    )
+        else
+            return (ActionExtendedSpacePOMDP(-steering_angle,0.0),
+                    ActionExtendedSpacePOMDP(-2*steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(-steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(0.0,-delta_speed),
+                    ActionExtendedSpacePOMDP(0.0,0.0),
+                    ActionExtendedSpacePOMDP(0.0,delta_speed),
+                    ActionExtendedSpacePOMDP(steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(2*steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(steering_angle,0.0),
+                    ActionExtendedSpacePOMDP(steering_angle_n,-delta_speed),
+                    ActionExtendedSpacePOMDP(-steering_angle_n,-delta_speed),
+                    )
+        end
+    end
+end
 
-function get_actions(m::ExtendedSpacePOMDP,b)
+function get_actions_with_SB_HJB_rollout(m::ExtendedSpacePOMDP,b)
     max_steering_angle = m.max_vehicle_steering_angle
     max_delta_angle = m.vehicle_action_max_delta_heading_angle
     delta_speed = m.vehicle_action_delta_speed
@@ -839,53 +1068,72 @@ function get_actions(m::ExtendedSpacePOMDP,b)
         rollout_action = better_reactive_policy(SVector(pomdp_state.vehicle_x,pomdp_state.vehicle_y,wrap_between_negative_pi_to_pi(pomdp_state.vehicle_theta),pomdp_state.vehicle_v),
                                 delta_speed,750.0,m.rollout_guide.get_actions, m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,
                                 m.rollout_guide.value_array,m.rollout_guide.veh,m.rollout_guide.state_grid)
-        return (
-                ActionExtendedSpacePOMDP(-steering_angle,0.0),
-                ActionExtendedSpacePOMDP(-2*steering_angle/3,0.0),
-                ActionExtendedSpacePOMDP(-steering_angle/3,0.0),
-                ActionExtendedSpacePOMDP(0.0,-delta_speed),
-                ActionExtendedSpacePOMDP(0.0,0.0),
-                ActionExtendedSpacePOMDP(steering_angle/3,0.0),
-                ActionExtendedSpacePOMDP(2*steering_angle/3,0.0),
-                ActionExtendedSpacePOMDP(steering_angle,0.0),
-                ActionExtendedSpacePOMDP(rollout_action[1],rollout_action[2]),
-                ActionExtendedSpacePOMDP(steering_angle,-delta_speed),
-                ActionExtendedSpacePOMDP(-steering_angle,-delta_speed),
-                ActionExtendedSpacePOMDP(-10.0,-10.0)
-                )
+        if(rollout_action[1]!=0.0 && rollout_action[2] == -delta_speed)
+            return (
+                    ActionExtendedSpacePOMDP(-steering_angle,0.0),
+                    ActionExtendedSpacePOMDP(-2*steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(-steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(0.0,-delta_speed),
+                    ActionExtendedSpacePOMDP(0.0,0.0),
+                    ActionExtendedSpacePOMDP(steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(2*steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(steering_angle,0.0),
+                    ActionExtendedSpacePOMDP(rollout_action[1],rollout_action[2]),
+                    ActionExtendedSpacePOMDP(-10.0,-10.0)
+                    )
+        else
+            return (
+                    ActionExtendedSpacePOMDP(-steering_angle,0.0),
+                    ActionExtendedSpacePOMDP(-2*steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(-steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(0.0,-delta_speed),
+                    ActionExtendedSpacePOMDP(0.0,0.0),
+                    ActionExtendedSpacePOMDP(steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(2*steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(steering_angle,0.0),
+                    ActionExtendedSpacePOMDP(-10.0,-10.0)
+                    )
+        end
     else
         steering_angle = clamp(get_steering_angle(m.vehicle_wheelbase,max_delta_angle,pomdp_state.vehicle_v,m.one_time_step),0.0,max_steering_angle)
         rollout_action= better_reactive_policy(SVector(pomdp_state.vehicle_x,pomdp_state.vehicle_y,wrap_between_negative_pi_to_pi(pomdp_state.vehicle_theta),pomdp_state.vehicle_v),
                                 delta_speed,750.0,m.rollout_guide.get_actions, m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,
                                 m.rollout_guide.value_array,m.rollout_guide.veh,m.rollout_guide.state_grid)
-        return (ActionExtendedSpacePOMDP(-steering_angle,0.0),
-                ActionExtendedSpacePOMDP(-2*steering_angle/3,0.0),
-                ActionExtendedSpacePOMDP(-steering_angle/3,0.0),
-                ActionExtendedSpacePOMDP(0.0,-delta_speed),
-                ActionExtendedSpacePOMDP(0.0,0.0),
-                ActionExtendedSpacePOMDP(0.0,delta_speed),
-                ActionExtendedSpacePOMDP(steering_angle/3,0.0),
-                ActionExtendedSpacePOMDP(2*steering_angle/3,0.0),
-                ActionExtendedSpacePOMDP(steering_angle,0.0),
-                ActionExtendedSpacePOMDP(rollout_action[1],rollout_action[2]),
-                ActionExtendedSpacePOMDP(steering_angle,-delta_speed),
-                ActionExtendedSpacePOMDP(-steering_angle,-delta_speed),
-                ActionExtendedSpacePOMDP(-10.0,-10.0)
-                )
+        if(rollout_action[1]!=0.0 && rollout_action[2] != 0.0 )
+            return (ActionExtendedSpacePOMDP(-steering_angle,0.0),
+                    ActionExtendedSpacePOMDP(-2*steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(-steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(0.0,-delta_speed),
+                    ActionExtendedSpacePOMDP(0.0,0.0),
+                    ActionExtendedSpacePOMDP(0.0,delta_speed),
+                    ActionExtendedSpacePOMDP(steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(2*steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(steering_angle,0.0),
+                    ActionExtendedSpacePOMDP(rollout_action[1],rollout_action[2]),
+                    ActionExtendedSpacePOMDP(-10.0,-10.0)
+                    )
+        else
+            return (ActionExtendedSpacePOMDP(-steering_angle,0.0),
+                    ActionExtendedSpacePOMDP(-2*steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(-steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(0.0,-delta_speed),
+                    ActionExtendedSpacePOMDP(0.0,0.0),
+                    ActionExtendedSpacePOMDP(0.0,delta_speed),
+                    ActionExtendedSpacePOMDP(steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(2*steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(steering_angle,0.0),
+                    ActionExtendedSpacePOMDP(-10.0,-10.0)
+                    )
+        end
     end
 end
 
-
-
-#Debugging functions below
-
-function get_actions_copy(m::ExtendedSpacePOMDP,b)
+function get_actions_without_SB_random_rollout(m::ExtendedSpacePOMDP,b)
     max_steering_angle = m.max_vehicle_steering_angle
     max_delta_angle = m.vehicle_action_max_delta_heading_angle
     delta_speed = m.vehicle_action_delta_speed
     pomdp_state = first(particles(b))
-    # if(pomdp_state.vehicle_v == 0.0)
-    if(false)
+    if(pomdp_state.vehicle_v == 0.0)
         steering_angle = clamp(get_steering_angle(m.vehicle_wheelbase,max_delta_angle,delta_speed,m.one_time_step),0.0,max_steering_angle)
         return (ActionExtendedSpacePOMDP(-steering_angle,delta_speed),
                 ActionExtendedSpacePOMDP(-2*steering_angle/3,delta_speed),
@@ -896,34 +1144,51 @@ function get_actions_copy(m::ExtendedSpacePOMDP,b)
                 ActionExtendedSpacePOMDP(2*steering_angle/3,delta_speed),
                 ActionExtendedSpacePOMDP(steering_angle,delta_speed)
                 )
-    # elseif(pomdp_state.vehicle_v == m.max_vehicle_speed)
+    elseif(pomdp_state.vehicle_v == m.max_vehicle_speed)
+        steering_angle = clamp(get_steering_angle(m.vehicle_wheelbase,max_delta_angle,pomdp_state.vehicle_v,m.one_time_step),
+                                0.0,max_steering_angle)
+        steering_angle_n = clamp(get_steering_angle(m.vehicle_wheelbase, max_delta_angle, pomdp_state.vehicle_v-delta_speed, m.one_time_step),
+                                0.0,max_steering_angle)
+        return (
+                ActionExtendedSpacePOMDP(-steering_angle,0.0),
+                ActionExtendedSpacePOMDP(-2*steering_angle/3,0.0),
+                ActionExtendedSpacePOMDP(-steering_angle/3,0.0),
+                ActionExtendedSpacePOMDP(0.0,-delta_speed),
+                ActionExtendedSpacePOMDP(0.0,0.0),
+                ActionExtendedSpacePOMDP(steering_angle/3,0.0),
+                ActionExtendedSpacePOMDP(2*steering_angle/3,0.0),
+                ActionExtendedSpacePOMDP(steering_angle,0.0),
+                ActionExtendedSpacePOMDP(steering_angle_n,-delta_speed),
+                ActionExtendedSpacePOMDP(-steering_angle_n,-delta_speed),
+                )
     else
-        steering_angle = clamp(get_steering_angle(m.vehicle_wheelbase,max_delta_angle,pomdp_state.vehicle_v,m.one_time_step),0.0,max_steering_angle)
-        g = pomdp_state.vehicle_x
-        st = SVector(pomdp_state.vehicle_x,pomdp_state.vehicle_y,wrap_between_negative_pi_to_pi(pomdp_state.vehicle_theta),pomdp_state.vehicle_v)
-        # st = mirror(st)
-        # rac = m.rollout_guide.get_actions
-        # rac = mirror(rac)
-        # rc = m.rollout_guide.get_cost
-        # rc = mirror(rc)
-        # Q = m.rollout_guide.q_value_array
-        # Q = mirror(Q)
-        # V = m.rollout_guide.value_array
-        # V = mirror(V)
-        # VH = m.rollout_guide.veh
-        # VH = mirror(VH)
-        # sg = m.rollout_guide.state_grid
-        # sg = mirror(sg)
-        # println(typeof(sg))
-        # better_reactive_policy(st, delta_speed, 750.0, m.rollout_guide.get_actions, m.rollout_guide.get_cost, m.one_time_step,
-        #                         m.rollout_guide.q_value_array, m.rollout_guide.value_array, m.rollout_guide.veh, m.rollout_guide.state_grid);
-        p = even_better_reactive_policy(st, delta_speed, 750.0, m.one_time_step, m.rollout_guide.q_value_array,
-                    m.rollout_guide.value_array, m.rollout_guide.veh, m.rollout_guide.state_grid);
+        steering_angle = clamp(get_steering_angle(m.vehicle_wheelbase,max_delta_angle,pomdp_state.vehicle_v,m.one_time_step),
+                            0.0,max_steering_angle)
+        steering_angle_n = clamp(get_steering_angle(m.vehicle_wheelbase, max_delta_angle, pomdp_state.vehicle_v-delta_speed, m.one_time_step),
+                            0.0, max_steering_angle)
+        return (ActionExtendedSpacePOMDP(-steering_angle,0.0),
+                ActionExtendedSpacePOMDP(-2*steering_angle/3,0.0),
+                ActionExtendedSpacePOMDP(-steering_angle/3,0.0),
+                ActionExtendedSpacePOMDP(0.0,-delta_speed),
+                ActionExtendedSpacePOMDP(0.0,0.0),
+                ActionExtendedSpacePOMDP(0.0,delta_speed),
+                ActionExtendedSpacePOMDP(steering_angle/3,0.0),
+                ActionExtendedSpacePOMDP(2*steering_angle/3,0.0),
+                ActionExtendedSpacePOMDP(steering_angle,0.0),
+                ActionExtendedSpacePOMDP(steering_angle_n,-delta_speed),
+                ActionExtendedSpacePOMDP(-steering_angle_n,-delta_speed),
+                )
+    end
+end
 
-        # rollout_action = better_reactive_policy(st, delta_speed, 750.0, m.rollout_guide.get_actions, m.rollout_guide.get_cost, m.one_time_step,
-        #                         m.rollout_guide.q_value_array, m.rollout_guide.value_array, m.rollout_guide.veh, m.rollout_guide.state_grid)
-
-    return (ActionExtendedSpacePOMDP(-steering_angle,g*100),
+function get_actions_with_SB_random_rollout(m::ExtendedSpacePOMDP,b)
+    max_steering_angle = m.max_vehicle_steering_angle
+    max_delta_angle = m.vehicle_action_max_delta_heading_angle
+    delta_speed = m.vehicle_action_delta_speed
+    pomdp_state = first(particles(b))
+    if(pomdp_state.vehicle_v == 0.0)
+        steering_angle = clamp(get_steering_angle(m.vehicle_wheelbase,max_delta_angle,delta_speed,m.one_time_step),0.0,max_steering_angle)
+        return (ActionExtendedSpacePOMDP(-steering_angle,delta_speed),
                 ActionExtendedSpacePOMDP(-2*steering_angle/3,delta_speed),
                 ActionExtendedSpacePOMDP(-steering_angle/3,delta_speed),
                 ActionExtendedSpacePOMDP(0.0,delta_speed),
@@ -932,83 +1197,269 @@ function get_actions_copy(m::ExtendedSpacePOMDP,b)
                 ActionExtendedSpacePOMDP(2*steering_angle/3,delta_speed),
                 ActionExtendedSpacePOMDP(steering_angle,delta_speed)
                 )
+    elseif(pomdp_state.vehicle_v == m.max_vehicle_speed)
+        steering_angle = clamp(get_steering_angle(m.vehicle_wheelbase,max_delta_angle,pomdp_state.vehicle_v,m.one_time_step),0.0,max_steering_angle)
+        return (
+                ActionExtendedSpacePOMDP(-steering_angle,0.0),
+                ActionExtendedSpacePOMDP(-2*steering_angle/3,0.0),
+                ActionExtendedSpacePOMDP(-steering_angle/3,0.0),
+                ActionExtendedSpacePOMDP(0.0,-delta_speed),
+                ActionExtendedSpacePOMDP(0.0,0.0),
+                ActionExtendedSpacePOMDP(steering_angle/3,0.0),
+                ActionExtendedSpacePOMDP(2*steering_angle/3,0.0),
+                ActionExtendedSpacePOMDP(steering_angle,0.0),
+                ActionExtendedSpacePOMDP(-10.0,-10.0)
+                )
+    else
+        steering_angle = clamp(get_steering_angle(m.vehicle_wheelbase,max_delta_angle,pomdp_state.vehicle_v,m.one_time_step),0.0,max_steering_angle)
+        return (ActionExtendedSpacePOMDP(-steering_angle,0.0),
+                ActionExtendedSpacePOMDP(-2*steering_angle/3,0.0),
+                ActionExtendedSpacePOMDP(-steering_angle/3,0.0),
+                ActionExtendedSpacePOMDP(0.0,-delta_speed),
+                ActionExtendedSpacePOMDP(0.0,0.0),
+                ActionExtendedSpacePOMDP(0.0,delta_speed),
+                ActionExtendedSpacePOMDP(steering_angle/3,0.0),
+                ActionExtendedSpacePOMDP(2*steering_angle/3,0.0),
+                ActionExtendedSpacePOMDP(steering_angle,0.0),
+                ActionExtendedSpacePOMDP(-10.0,-10.0)
+                )
     end
 end
 
-function mirror(x)
-    return x
+function get_actions_without_SB_straight_line_rollout(m::ExtendedSpacePOMDP,b)
+    max_steering_angle = m.max_vehicle_steering_angle
+    max_delta_angle = m.vehicle_action_max_delta_heading_angle
+    delta_speed = m.vehicle_action_delta_speed
+    pomdp_state = first(particles(b))
+    if(pomdp_state.vehicle_v == 0.0)
+        steering_angle = clamp(get_steering_angle(m.vehicle_wheelbase,max_delta_angle,delta_speed,m.one_time_step),0.0,max_steering_angle)
+        return (ActionExtendedSpacePOMDP(-steering_angle,delta_speed),
+                ActionExtendedSpacePOMDP(-2*steering_angle/3,delta_speed),
+                ActionExtendedSpacePOMDP(-steering_angle/3,delta_speed),
+                ActionExtendedSpacePOMDP(0.0,delta_speed),
+                ActionExtendedSpacePOMDP(0.0,0.0),
+                ActionExtendedSpacePOMDP(steering_angle/3,delta_speed),
+                ActionExtendedSpacePOMDP(2*steering_angle/3,delta_speed),
+                ActionExtendedSpacePOMDP(steering_angle,delta_speed)
+                )
+    elseif(pomdp_state.vehicle_v == m.max_vehicle_speed)
+        steering_angle = clamp(get_steering_angle(m.vehicle_wheelbase,max_delta_angle,pomdp_state.vehicle_v,m.one_time_step),
+                                0.0,max_steering_angle)
+        steering_angle_n = clamp(get_steering_angle(m.vehicle_wheelbase, max_delta_angle, pomdp_state.vehicle_v-delta_speed, m.one_time_step),
+                                0.0,max_steering_angle)
+        rollout_delta_angle = get_straight_line_action(m, pomdp_state) #Just an angle value
+        rollout_steering_angle = clamp(get_steering_angle(m.vehicle_wheelbase,rollout_delta_angle,pomdp_state.vehicle_v,m.one_time_step),0.0,max_steering_angle)
+        rollout_action = (rollout_steering_angle,0.0)
+        if( rollout_action[1]!=0.0 && rollout_action[1]!= steering_angle && rollout_action[1]!=-steering_angle )
+            return (
+                    ActionExtendedSpacePOMDP(-steering_angle,0.0),
+                    ActionExtendedSpacePOMDP(-2*steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(-steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(0.0,-delta_speed),
+                    ActionExtendedSpacePOMDP(0.0,0.0),
+                    ActionExtendedSpacePOMDP(steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(2*steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(steering_angle,0.0),
+                    ActionExtendedSpacePOMDP(rollout_action[1],rollout_action[2]),
+                    ActionExtendedSpacePOMDP(steering_angle_n,-delta_speed),
+                    ActionExtendedSpacePOMDP(-steering_angle_n,-delta_speed),
+                    )
+        else
+            return (
+                    ActionExtendedSpacePOMDP(-steering_angle,0.0),
+                    ActionExtendedSpacePOMDP(-2*steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(-steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(0.0,-delta_speed),
+                    ActionExtendedSpacePOMDP(0.0,0.0),
+                    ActionExtendedSpacePOMDP(steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(2*steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(steering_angle,0.0),
+                    ActionExtendedSpacePOMDP(steering_angle_n,-delta_speed),
+                    ActionExtendedSpacePOMDP(-steering_angle_n,-delta_speed),
+                    )
+        end
+    else
+        steering_angle = clamp(get_steering_angle(m.vehicle_wheelbase,max_delta_angle,pomdp_state.vehicle_v,m.one_time_step),
+                            0.0,max_steering_angle)
+        steering_angle_n = clamp(get_steering_angle(m.vehicle_wheelbase, max_delta_angle, pomdp_state.vehicle_v-delta_speed, m.one_time_step),
+                            0.0, max_steering_angle)
+        rollout_delta_angle = get_straight_line_action(m, pomdp_state) #Just an angle value
+        rollout_steering_angle = clamp(get_steering_angle(m.vehicle_wheelbase,rollout_delta_angle,pomdp_state.vehicle_v,m.one_time_step),0.0,max_steering_angle)
+        rollout_action = (rollout_steering_angle,0.0)
+        if( rollout_action[1]!=0.0 && rollout_action[1]!=steering_angle && rollout_action[1]!=-steering_angle )
+            return (ActionExtendedSpacePOMDP(-steering_angle,0.0),
+                    ActionExtendedSpacePOMDP(-2*steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(-steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(0.0,-delta_speed),
+                    ActionExtendedSpacePOMDP(0.0,0.0),
+                    ActionExtendedSpacePOMDP(0.0,delta_speed),
+                    ActionExtendedSpacePOMDP(steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(2*steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(steering_angle,0.0),
+                    ActionExtendedSpacePOMDP(rollout_action[1],rollout_action[2]),
+                    ActionExtendedSpacePOMDP(steering_angle_n,-delta_speed),
+                    ActionExtendedSpacePOMDP(-steering_angle_n,-delta_speed),
+                    )
+        else
+            return (ActionExtendedSpacePOMDP(-steering_angle,0.0),
+                    ActionExtendedSpacePOMDP(-2*steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(-steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(0.0,-delta_speed),
+                    ActionExtendedSpacePOMDP(0.0,0.0),
+                    ActionExtendedSpacePOMDP(0.0,delta_speed),
+                    ActionExtendedSpacePOMDP(steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(2*steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(steering_angle,0.0),
+                    ActionExtendedSpacePOMDP(steering_angle_n,-delta_speed),
+                    ActionExtendedSpacePOMDP(-steering_angle_n,-delta_speed),
+                    )
+        end
+    end
 end
 
-function test_no_global1()
-    s = load("./src/HJB_rollout_guide.jld2");
-    rollout_guide = s["rollout_guide"];
-    m = ExtendedSpacePOMDP(pomdp_details,env,veh_params,rollout_guide);
-    # @profview for i in 1:10000 testing2(t,m) end
+function get_actions_with_SB_straight_line_rollout(m::ExtendedSpacePOMDP,b)
+    max_steering_angle = m.max_vehicle_steering_angle
+    max_delta_angle = m.vehicle_action_max_delta_heading_angle
+    delta_speed = m.vehicle_action_delta_speed
+    pomdp_state = first(particles(b))
+    if(pomdp_state.vehicle_v == 0.0)
+        steering_angle = clamp(get_steering_angle(m.vehicle_wheelbase,max_delta_angle,delta_speed,m.one_time_step),0.0,max_steering_angle)
+        return (ActionExtendedSpacePOMDP(-steering_angle,delta_speed),
+                ActionExtendedSpacePOMDP(-2*steering_angle/3,delta_speed),
+                ActionExtendedSpacePOMDP(-steering_angle/3,delta_speed),
+                ActionExtendedSpacePOMDP(0.0,delta_speed),
+                ActionExtendedSpacePOMDP(0.0,0.0),
+                ActionExtendedSpacePOMDP(steering_angle/3,delta_speed),
+                ActionExtendedSpacePOMDP(2*steering_angle/3,delta_speed),
+                ActionExtendedSpacePOMDP(steering_angle,delta_speed)
+                )
+    elseif(pomdp_state.vehicle_v == m.max_vehicle_speed)
+        steering_angle = clamp(get_steering_angle(m.vehicle_wheelbase,max_delta_angle,pomdp_state.vehicle_v,m.one_time_step),0.0,max_steering_angle)
+        rollout_delta_angle = get_straight_line_action(m, pomdp_state) #Just an angle value
+        rollout_steering_angle = clamp(get_steering_angle(m.vehicle_wheelbase,rollout_delta_angle,pomdp_state.vehicle_v,m.one_time_step),0.0,max_steering_angle)
+        rollout_action = (rollout_steering_angle,0.0)
+        if(rollout_action[1]!=0.0 && rollout_action[1] != -steering_angle && rollout_action[1]!=-steering_angle)
+            return (
+                    ActionExtendedSpacePOMDP(-steering_angle,0.0),
+                    ActionExtendedSpacePOMDP(-2*steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(-steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(0.0,-delta_speed),
+                    ActionExtendedSpacePOMDP(0.0,0.0),
+                    ActionExtendedSpacePOMDP(steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(2*steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(steering_angle,0.0),
+                    ActionExtendedSpacePOMDP(rollout_action[1],rollout_action[2]),
+                    ActionExtendedSpacePOMDP(-10.0,-10.0)
+                    )
+        else
+            return (
+                    ActionExtendedSpacePOMDP(-steering_angle,0.0),
+                    ActionExtendedSpacePOMDP(-2*steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(-steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(0.0,-delta_speed),
+                    ActionExtendedSpacePOMDP(0.0,0.0),
+                    ActionExtendedSpacePOMDP(steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(2*steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(steering_angle,0.0),
+                    ActionExtendedSpacePOMDP(-10.0,-10.0)
+                    )
+        end
+    else
+        steering_angle = clamp(get_steering_angle(m.vehicle_wheelbase,max_delta_angle,pomdp_state.vehicle_v,m.one_time_step),0.0,max_steering_angle)
+        rollout_delta_angle = get_straight_line_action(m, pomdp_state) #Just an angle value
+        rollout_steering_angle = clamp(get_steering_angle(m.vehicle_wheelbase,rollout_delta_angle,pomdp_state.vehicle_v,m.one_time_step),0.0,max_steering_angle)
+        rollout_action = (rollout_steering_angle,0.0)
+        if(rollout_action[1]!=0.0 && rollout_action[1] != -steering_angle && rollout_action[1]!=-steering_angle )
+            return (ActionExtendedSpacePOMDP(-steering_angle,0.0),
+                    ActionExtendedSpacePOMDP(-2*steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(-steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(0.0,-delta_speed),
+                    ActionExtendedSpacePOMDP(0.0,0.0),
+                    ActionExtendedSpacePOMDP(0.0,delta_speed),
+                    ActionExtendedSpacePOMDP(steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(2*steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(steering_angle,0.0),
+                    ActionExtendedSpacePOMDP(rollout_action[1],rollout_action[2]),
+                    ActionExtendedSpacePOMDP(-10.0,-10.0)
+                    )
+        else
+            return (ActionExtendedSpacePOMDP(-steering_angle,0.0),
+                    ActionExtendedSpacePOMDP(-2*steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(-steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(0.0,-delta_speed),
+                    ActionExtendedSpacePOMDP(0.0,0.0),
+                    ActionExtendedSpacePOMDP(0.0,delta_speed),
+                    ActionExtendedSpacePOMDP(steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(2*steering_angle/3,0.0),
+                    ActionExtendedSpacePOMDP(steering_angle,0.0),
+                    ActionExtendedSpacePOMDP(-10.0,-10.0)
+                    )
+        end
+    end
 end
 
-function test_no_global2()
-    s = load("./src/HJB_rollout_guide.jld2");
-    rollout_guide = s["rollout_guide"];
-    new_rollout_guide = NewHJBPolicy(rollout_guide.Dt,rollout_guide.value_array,rollout_guide.q_value_array,rollout_guide.env,rollout_guide.veh,rollout_guide.state_grid);
-    m = ExtendedSpacePOMDP(pomdp_details,env,veh_params,new_rollout_guide);
-    # @profview for i in 1:10000 testing2(t,m) end
+function get_straight_line_action(m, pomdp_state)
+
+    delta_angle_limit = m.vehicle_action_max_delta_heading_angle
+    required_orientation = get_heading_angle( m.vehicle_goal.x, m.vehicle_goal.y, pomdp_state.vehicle_x, pomdp_state.vehicle_y)
+    # println(required_orientation*180/pi)
+    delta_angle = required_orientation - pomdp_state.vehicle_theta
+    # println(delta_angle*180/pi)
+    abs_delta_angle = abs(delta_angle)
+    if(abs_delta_angle<=pi)
+        delta_angle = clamp(delta_angle, -delta_angle_limit, delta_angle_limit)
+    else
+        if(delta_angle>=0.0)
+            delta_angle = clamp(delta_angle-2*pi, -delta_angle_limit, delta_angle_limit)
+        else
+            delta_angle = clamp(delta_angle+2*pi, -delta_angle_limit, delta_angle_limit)
+        end
+    end
+    return delta_angle
 end
 
-function testing(t,Q,V,veh,sg)
-    pomdp_state = t.scenarios[1][1][2]
-    st = SVector(pomdp_state.vehicle_x,pomdp_state.vehicle_y,wrap_between_negative_pi_to_pi(pomdp_state.vehicle_theta),pomdp_state.vehicle_v)
-    even_better_reactive_policy(st, 0.5, 750.0, 0.5, Q, V, veh, sg);
+#get_actions function without considering other rollout policies
+function get_actions_only_HJB_rollouts(m::ExtendedSpacePOMDP,b)
+    if(m.sudden_break_flag)
+        return get_actions_with_SB_HJB_rollout(m,b)
+    else
+        return get_actions_without_SB_HJB_rollout(m,b)
+    end
 end
-
-function testing2(t,m)
-    pomdp_state = t.scenarios[1][1][2]
-    st = SVector(pomdp_state.vehicle_x,pomdp_state.vehicle_y,wrap_between_negative_pi_to_pi(pomdp_state.vehicle_theta),pomdp_state.vehicle_v)
-    return even_better_reactive_policy(st, 0.5, 750.0, 0.5, m.rollout_guide.q_value_array, m.rollout_guide.value_array, m.rollout_guide.veh, m.rollout_guide.state_grid);
-end
-
-function testing3(t,m,Q)
-    pomdp_state = t.scenarios[1][1][2]
-    st = SVector(pomdp_state.vehicle_x,pomdp_state.vehicle_y,wrap_between_negative_pi_to_pi(pomdp_state.vehicle_theta),pomdp_state.vehicle_v)
-    return even_better_reactive_policy(st, 0.5, 750.0, 0.5, Q, m.rollout_guide.value_array, m.rollout_guide.veh, m.rollout_guide.state_grid);
-end
-
-function testing4(t,m,V)
-    pomdp_state = t.scenarios[1][1][2]
-    st = SVector(pomdp_state.vehicle_x,pomdp_state.vehicle_y,wrap_between_negative_pi_to_pi(pomdp_state.vehicle_theta),pomdp_state.vehicle_v)
-    return even_better_reactive_policy(st, 0.5, 750.0, 0.5, m.rollout_guide.q_value_array, V, m.rollout_guide.veh, m.rollout_guide.state_grid);
-end
-
-function testing5(t,m,vehi)
-    pomdp_state = t.scenarios[1][1][2]
-    st = SVector(pomdp_state.vehicle_x,pomdp_state.vehicle_y,wrap_between_negative_pi_to_pi(pomdp_state.vehicle_theta),pomdp_state.vehicle_v)
-    return even_better_reactive_policy(st, 0.5, 750.0, 0.5, m.rollout_guide.q_value_array, m.rollout_guide.value_array, vehi,m.rollout_guide.state_grid);
-end
-
-function testing6(t,m,sg)
-    pomdp_state = t.scenarios[1][1][2]
-    st = SVector(pomdp_state.vehicle_x,pomdp_state.vehicle_y,wrap_between_negative_pi_to_pi(pomdp_state.vehicle_theta),pomdp_state.vehicle_v)
-    return even_better_reactive_policy(st, 0.5, 750.0, 0.5, m.rollout_guide.q_value_array, m.rollout_guide.value_array, m.rollout_guide.veh, sg);
-end
-# @profview for i in 1:1000 testing6(t,extended_space_pomdp,extended_space_pomdp.rollout_guide.state_grid) end
 
 #=
-
-testing(t,extended_space_pomdp.rollout_guide.q_value_array,extended_space_pomdp.rollout_guide.value_array,
-        extended_space_pomdp.rollout_guide.veh, extended_space_pomdp.rollout_guide.state_grid)
-@btime testing($t,$extended_space_pomdp.rollout_guide.q_value_array,$extended_space_pomdp.rollout_guide.value_array,
-        $extended_space_pomdp.rollout_guide.veh, $extended_space_pomdp.rollout_guide.state_grid)
-@profview for i in 1:10000 testing(t,extended_space_pomdp.rollout_guide.q_value_array,extended_space_pomdp.rollout_guide.value_array,
-        extended_space_pomdp.rollout_guide.veh, extended_space_pomdp.rollout_guide.state_grid) end
-
-testing2(t,extended_space_pomdp)
-@btime testing2($t,$extended_space_pomdp)
-@profview for i in 1:1000 testing2(t,extended_space_pomdp) end
-
-testing2(t,new_m)
-@btime testing2($t,$new_m)
-@profview for i in 1:1000 testing2(t,new_m) end
-
+Please note that instead of doing it this way, I can also do multiple dispatch
+on type of m where it is gonna be different based on the different rollout_guide
+type and that should fix this problem too.
+But stick to this for now!
 =#
+function get_actions(m::ExtendedSpacePOMDP,b)
+
+    #This condition is used for random rollouts
+    if(typeof(m.rollout_guide) == Tuple{Bool})
+        if(m.sudden_break_flag)
+            return get_actions_with_SB_random_rollout(m,b)
+        else
+            return get_actions_without_SB_random_rollout(m,b)
+        end
+    #This condition is used for straight line rollouts
+    elseif(typeof(m.rollout_guide) == Tuple{Bool,Bool})
+        if(m.sudden_break_flag)
+            return get_actions_with_SB_straight_line_rollout(m,b)
+        else
+            return get_actions_without_SB_straight_line_rollout(m,b)
+        end
+    #This condition is used for HJB rollouts
+    else
+        if(m.sudden_break_flag)
+            return get_actions_with_SB_HJB_rollout(m,b)
+        else
+            return get_actions_without_SB_HJB_rollout(m,b)
+        end
+    end
+end
+
+
 #=
 function get_RG(r)
     R = (Dt = r.Dt,
@@ -1031,17 +1482,15 @@ get_actions_copy(extended_space_pomdp,dummy_b)
 
 new_rollout_guide = NewHJBPolicy(rollout_guide.Dt,rollout_guide.value_array,rollout_guide.q_value_array,rollout_guide.env,rollout_guide.veh,rollout_guide.state_grid);
 new_m = ExtendedSpacePOMDP(pomdp_details,env,veh_params,new_rollout_guide);
-
 =#
 
-function default_es_pomdp_action(m,b,ex)
-    delta_speed = m.vehicle_action_delta_speed
-    # pomdp_state = first(particles(b))
-    rollout_action, q_vals = reactive_policy(SVector(b.vehicle_x,b.vehicle_y,wrap_between_negative_pi_to_pi(b.vehicle_theta),b.vehicle_v),
-                                delta_speed,750.0,m.rollout_guide.get_actions, m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,
-                                m.rollout_guide.value_array,m.rollout_guide.veh,m.rollout_guide.state_grid)
+function get_default_action(m::ExtendedSpacePOMDP,b,ex)
     # println(ex)
-    return ActionExtendedSpacePOMDP(rollout_action[1],rollout_action[2])
+    if(m.sudden_break_flag)
+        return ActionExtendedSpacePOMDP(-10.0,-10.0)
+    else
+        return ActionExtendedSpacePOMDP(0.0,-0.5)
+    end
 end
 
 discount(m::ExtendedSpacePOMDP) = m.discount_factor
@@ -1098,3 +1547,69 @@ actions(m::ExtendedSpacePOMDP,b) = get_actions(m,b)
 #         # return [(delta_angle, 1.0),(-pi/4,0.0),(-pi/6,0.0),(-pi/12,0.0),(0.0,-1.0),(0.0,0.0),(0.0,1.0),(pi/12,1.0),(pi/6,0.0),(pi/4,0.0),(-10.0,-10.0)]
 #     end
 # end
+
+
+function calculate_lower_bound_straight_line(m::ExtendedSpacePOMDP,b)
+    #Implement a reactive controller for your lower bound
+
+    delta_speed = m.vehicle_action_delta_speed
+    #This bool is also used to check if all the states in the belief are terminal or not.
+    first_execution_flag = true
+    delta_angle = 0.0
+    for (s, w) in weighted_particles(b)
+        if(s.vehicle_x == -100.0 && s.vehicle_y == -100.0)
+            continue
+        else
+            if(first_execution_flag)
+                required_orientation = get_heading_angle( m.vehicle_goal.x, m.vehicle_goal.y, s.vehicle_x, s.vehicle_y)
+                delta_angle = required_orientation - s.vehicle_theta
+                abs_delta_angle = abs(delta_angle)
+                if(abs_delta_angle<=pi)
+                    delta_angle = clamp(delta_angle, -pi/4, pi/4)
+                else
+                    if(delta_angle>=0.0)
+                        delta_angle = clamp(delta_angle-2*pi, -pi/4, pi/4)
+                    else
+                        delta_angle = clamp(delta_angle+2*pi, -pi/4, pi/4)
+                    end
+                end
+                first_execution_flag = false
+            else
+                dist_to_closest_human = 20000.0  #Some really big infeasible number (not Inf because avoid the type mismatch error)
+                for human in s.nearby_humans
+                    euclidean_distance = sqrt((s.vehicle_x - human.x)^2 + (s.vehicle_y - human.y)^2)
+                    if(euclidean_distance < dist_to_closest_human)
+                        dist_to_closest_human = euclidean_distance
+                    end
+                    if(dist_to_closest_human < m.d_near)
+                        return ActionExtendedSpacePOMDP(delta_angle,-delta_speed)
+                    end
+                end
+                if(dist_to_closest_human > m.d_far)
+                    chosen_delta_speed = delta_speed
+                else
+                    chosen_delta_speed = 0.0
+                end
+                if(chosen_delta_speed < delta_speed)
+                    delta_speed = chosen_delta_speed
+                end
+            end
+        end
+    end
+
+    #This condition is true only when all the states in the belief are terminal. In that case, just return (0.0,0.0)
+    if(first_execution_flag)
+        return ActionExtendedSpacePOMDP(0.0,0.0)
+    end
+
+    #This means all humans are away and you can accelerate.
+    if(delta_speed == m.vehicle_action_delta_speed)
+        #@show(0.0,speed_change_to_be_returned)
+        return ActionExtendedSpacePOMDP(delta_angle,delta_speed)
+    end
+
+    #If code has reached this point, then the best action is to maintain your current speed.
+    #We have already found the best steering angle to take.
+    #@show(best_delta_angle,0.0)
+    return ActionExtendedSpacePOMDP(delta_angle,0.0)
+end
