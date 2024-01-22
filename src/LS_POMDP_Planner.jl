@@ -48,11 +48,12 @@ struct LimitedSpacePOMDP{P} <: POMDPs.POMDP{StateLimitedSpacePOMDP,ActionLimited
     observation_discretization_length::Float64
     d_near::Float64
     d_far::Float64
+    sudden_break_flag::Bool
     world::ExperimentEnvironment
     rollout_guide::P
 end
 
-function LimitedSpacePOMDP(pomdp_details,env,vehicle_params,rollout_guide)
+function LimitedSpacePOMDP(pomdp_details,env,vehicle_params,rollout_guide,sudden_break_flag)
 
     return LimitedSpacePOMDP(
         pomdp_details.discount_factor,
@@ -72,6 +73,7 @@ function LimitedSpacePOMDP(pomdp_details,env,vehicle_params,rollout_guide)
         pomdp_details.observation_discretization_length,
         pomdp_details.d_near,
         pomdp_details.d_far,
+        sudden_break_flag,
         env,
         rollout_guide
         )
@@ -425,28 +427,65 @@ end
 ************************************************************************************************
 Action Function for the POMDP
 =#
-function get_actions(m::LimitedSpacePOMDP,b)
-
+function get_actions_with_SB(m::LimitedSpacePOMDP,b)
+    # println("************************With SB******************************")
     pomdp_state = first(particles(b))
     if(pomdp_state.vehicle_v == 0.0)
-        return [ActionLimitedSpacePOMDP(0.0),
+        return (ActionLimitedSpacePOMDP(0.0),
                 ActionLimitedSpacePOMDP(m.vehicle_action_delta_speed),
-                ]
+                )
     elseif(pomdp_state.vehicle_v == m.max_vehicle_speed)
-        return [ActionLimitedSpacePOMDP(-m.vehicle_action_delta_speed),
+        return (ActionLimitedSpacePOMDP(-m.vehicle_action_delta_speed),
                 ActionLimitedSpacePOMDP(0.0),
                 ActionLimitedSpacePOMDP(-10.0)
-                ]
+                )
     else
-        return [ActionLimitedSpacePOMDP(-m.vehicle_action_delta_speed),
+        return (ActionLimitedSpacePOMDP(-m.vehicle_action_delta_speed),
                 ActionLimitedSpacePOMDP(0.0),
                 ActionLimitedSpacePOMDP(m.vehicle_action_delta_speed),
                 ActionLimitedSpacePOMDP(-10.0)
-                ]
+                )
     end
 end
 
+function get_actions_without_SB(m::LimitedSpacePOMDP,b)
+    # println("************************Without SB******************************")
+    pomdp_state = first(particles(b))
+    if(pomdp_state.vehicle_v == 0.0)
+        return (ActionLimitedSpacePOMDP(0.0),
+                ActionLimitedSpacePOMDP(m.vehicle_action_delta_speed),
+                )
+    elseif(pomdp_state.vehicle_v == m.max_vehicle_speed)
+        return (ActionLimitedSpacePOMDP(-m.vehicle_action_delta_speed),
+                ActionLimitedSpacePOMDP(0.0),
+                )
+    else
+        return (ActionLimitedSpacePOMDP(-m.vehicle_action_delta_speed),
+                ActionLimitedSpacePOMDP(0.0),
+                ActionLimitedSpacePOMDP(m.vehicle_action_delta_speed),
+                )
+    end
+end
+
+function get_actions(m::LimitedSpacePOMDP,b)
+    if(m.sudden_break_flag)
+        return get_actions_with_SB(m,b)
+    else
+        return get_actions_without_SB(m,b)
+    end
+end
 
 discount(m::LimitedSpacePOMDP) = m.discount_factor
 isterminal(m::LimitedSpacePOMDP, s::StateLimitedSpacePOMDP) = is_terminal_state(s,Location(-100.0,-100.0));
 actions(m::LimitedSpacePOMDP,b) = get_actions(m,b)
+# actions(m::LimitedSpacePOMDP,b) = get_actions_with_SB(m,b)
+# actions(m::LimitedSpacePOMDP,b) = get_actions_without_SB(m,b)
+
+function get_default_action(m::LimitedSpacePOMDP,b,ex)
+    if(m.sudden_break_flag)
+        return ActionLimitedSpacePOMDP(-10.0)
+    else
+        return ActionLimitedSpacePOMDP(-0.5)
+    end
+    println(ex)
+end
