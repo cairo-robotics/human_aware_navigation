@@ -1,3 +1,4 @@
+using BellmanPDEs
 using ProfileView
 using Revise
 include("struct_definition.jl")
@@ -10,16 +11,47 @@ include("simulator.jl")
 include("simulator_utils.jl")
 include("parser.jl")
 include("visualization.jl")
-# include("configs/aspen_inputs.jl")
-# include("configs/aspen_inputs2.jl")
-include("configs/small_obstacles_20x20.jl")
-# include("configs/no_obstacles_big.jl")
 
-#Initialization
-# input_config = scenario1_big
-# input_config = aspen
-# input_config = aspen2
-input_config = small_obstacles_20x20
+#=
+Possible Environment Names
+
+no_obstacles_25x25
+small_obstacles_25x25
+big_obstacle_25x25
+L_shape_25x25
+indoor_tables_25x25
+
+no_obstacles_50x50
+small_obstacles_50x50
+big_obstacle_50x50
+L_shape_50x50
+
+aspen
+aspen2
+small_obstacles_20x20
+small_obstacles_30x30
+L_shape_30x30
+=#
+
+
+#=
+Initialization
+=#
+# environment_name = "no_obstacles_25x25"
+# environment_name = "small_obstacles_25x25"
+# environment_name = "big_obstacle_25x25"
+# environment_name = "L_shape_25x25"
+# environment_name = "no_obstacles_50x50"
+# environment_name = "small_obstacles_50x50"
+# environment_name = "big_obstacle_50x50"
+# environment_name = "L_shape_50x50"
+
+# environment_name = "indoor_tables_25x25"
+environment_name = "small_obstacles_25x25"
+
+filename = "configs/"*environment_name*".jl"
+include(filename)
+input_config = small_obstacles_25x25
 
 #=
 Define experiment details and POMDP planning details
@@ -53,8 +85,9 @@ r = sqrt( (0.5*input_config.veh_length)^2 + (0.5*input_config.veh_breadth)^2 )
 temp_veh_params = VehicleParametersLSPlanner(input_config.veh_wheelbase,input_config.veh_length,
                 input_config.veh_breadth,input_config.veh_dist_origin_to_center, r,
                 input_config.veh_max_speed,input_config.veh_max_steering_angle,veh_goal,Float64[])
-veh_body_origin = get_vehicle_body_origin(temp_veh_params.dist_origin_to_center, 0.0,temp_veh_params.length, temp_veh_params.breadth)
-output.vehicle_body_at_origin = veh_body_origin
+# veh_body_origin = get_vehicle_body_origin(temp_veh_params.dist_origin_to_center, 0.0,temp_veh_params.length, temp_veh_params.breadth)
+# output.vehicle_body_at_origin = veh_body_origin
+
 #=
 Find hybrid A* path for the given environment and vehicle.
 =#
@@ -64,6 +97,8 @@ vehicle_controls_sequence = hybrid_astar_search(env,veh,temp_veh_params,vehicle_
 veh_params = VehicleParametersLSPlanner(input_config.veh_wheelbase,input_config.veh_length,
                 input_config.veh_breadth,input_config.veh_dist_origin_to_center, r,
                 input_config.veh_max_speed,input_config.veh_max_steering_angle,veh_goal,vehicle_controls_sequence)
+vehicle_body = get_vehicle_body(veh_params)
+output.vehicle_body = vehicle_body
 
 #=
 Define Humans
@@ -80,11 +115,10 @@ initial_sim_obj = NavigationSimulator(env,veh,veh_params,veh_sensor_data,env_hum
 #=
 Run the experiment
 =#
-run_experiment!(initial_sim_obj, path_planning_details, pomdp_details, exp_details, output)
+SB_flag = false  #Apply Sudden Break Flag
+RS_flag = false  #Run shield Flag
+run_experiment!(initial_sim_obj, path_planning_details, pomdp_details, exp_details, output, SB_flag, RS_flag)
 
-#=
-Print useful values from the experiment
-=#
 
 #Create Gif
 create_gif = true
