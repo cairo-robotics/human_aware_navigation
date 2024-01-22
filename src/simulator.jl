@@ -262,8 +262,11 @@ end
 #=
 Run the experiment for Extended Space Planner
 =#
-function run_experiment!(current_sim_obj::NavigationSimulator{VehicleParametersESPlanner}, planner,
-                            pomdp_details::POMPDPlanningDetails, exp_details::ExperimentDetails, output::Output)
+function run_experiment!(current_sim_obj::NavigationSimulator{VehicleParametersESPlanner},
+                            planner, lower_bound_func, upper_bound_func,
+                            pomdp_details::POMPDPlanningDetails, exp_details::ExperimentDetails, output::Output,
+                            run_shield = false)
+
     # initialize variables
     current_time_value = 0.0
     current_vehicle_speed = 0.0
@@ -277,12 +280,26 @@ function run_experiment!(current_sim_obj::NavigationSimulator{VehicleParametersE
     info = nothing
     predicted_vehicle_pos_in_goal = false
     debug = false
-    run_shield = false
-    start_time = time()
+    print_despot_time = true
+    print_shielding_time = true
+    despot_start_time = 0.0
+    start_time = 0.0
+    ES_pomdp = planner.pomdp
 
-    # try
     # Run simulation
+    # try
     while(!stop_simulation!(current_sim_obj,current_time_value,exp_details,output))
+        pomdp_solver = DESPOTSolver(
+                        bounds=IndependentBounds(lower_bound_func,upper_bound_func,check_terminal=true,consistency_fix_thresh=1e-5),
+                        K=pomdp_details.num_scenarios,D=pomdp_details.tree_search_max_depth,
+                        tree_in_info=true,
+                        T_max=0.4, #Inf
+                        max_trials=100, #11
+                        default_action=get_default_action,
+                        rng = MersenneTwister(19)
+                        )
+        planner = POMDPs.solve(pomdp_solver, ES_pomdp);
+
         state_array = [current_sim_obj.vehicle.x, current_sim_obj.vehicle.y, current_sim_obj.vehicle.theta, current_sim_obj.vehicle.v]
         action_array = [current_action.steering_angle, current_action.delta_speed]
         println("\nTime_k = ", current_time_value,
@@ -333,8 +350,9 @@ function run_experiment!(current_sim_obj::NavigationSimulator{VehicleParametersE
                 println("Starting POMDP planning")
                 start_time = time()
             end
-            nbh = get_nearby_humans(current_sim_obj,pomdp_details.num_nearby_humans,pomdp_details.min_safe_distance_from_human,
-                                                    pomdp_details.cone_half_angle)
+            # nbh = get_nearby_humans(current_sim_obj,pomdp_details.num_nearby_humans,pomdp_details.min_safe_distance_from_human,
+            #                                         pomdp_details.cone_half_angle)
+            nbh = get_nearby_humans(current_sim_obj,pomdp_details.num_nearby_humans,4.5,pomdp_details.cone_half_angle)
             b = TreeSearchScenarioParameters(predicted_vehicle_state.x,predicted_vehicle_state.y,predicted_vehicle_state.theta,predicted_vehicle_state.v,
                                 modified_vehicle_params, exp_details.human_goal_locations, length(nbh.position_data), nbh.position_data, nbh.belief,
                                 current_sim_obj.env.length,current_sim_obj.env.breadth,time_duration_until_pomdp_action_determined)
@@ -342,16 +360,26 @@ function run_experiment!(current_sim_obj::NavigationSimulator{VehicleParametersE
             output.b_root[current_time_value] = b
 
             # Run DESPOT to calculate next action
+            if(print_despot_time)
+                println("Started Tree Construction")
+                despot_start_time = time()
+            end
+
             next_pomdp_action, info = action_info(planner, b)
             # next_pomdp_action, info = @profiler action_info(planner, b)
             # next_pomdp_action, info =
             # println(JET.@report_opt action_info(planner, b))
 
-            # return info
-
-            if(current_time_value > 30.0)
-                return info
+            if(print_despot_time)
+                println("Finished Tree Construction. Action selected")
+                time_taken = time() - despot_start_time
+                println("Time Taken : ", time_taken)
             end
+
+            # next_pomdp_action, info = @profiler action_info(planner, b)
+            # next_pomdp_action, info =
+            # println(JET.@report_opt action_info(planner, b))
+
             if(debug)
                 println("Finished POMDP planning. Action selected")
                 time_taken = time() - start_time
@@ -373,8 +401,16 @@ function run_experiment!(current_sim_obj::NavigationSimulator{VehicleParametersE
         # Shielding
         if(run_shield)
             println("POMDP requested action = ", [next_pomdp_action.steering_angle, next_pomdp_action.delta_speed])
-            shielding_nbh = get_nearby_humans(current_sim_obj,pomdp_details.num_nearby_humans,pomdp_details.min_safe_distance_from_human,
-                                                    pomdp_details.cone_half_angle)
+
+            if(print_shielding_time)
+                println("Started Shielding")
+                shielding_start_time = time()
+            end
+
+            #Some big number like 20. The goal is to pick all humans in the range of 10m
+            # shielding_nbh = get_nearby_humans(current_sim_obj,pomdp_details.num_nearby_humans,pomdp_details.min_safe_distance_from_human,
+            #                                         pomdp_details.cone_half_angle)
+            shielding_nbh = get_nearby_humans(current_sim_obj,20,9.5,pi/1.0)
             Dt_obs_to_k1 = 0.0
             # Check if the predicted vehicle position is in the goal region
             if(predicted_vehicle_pos_in_goal)
@@ -384,9 +420,17 @@ function run_experiment!(current_sim_obj::NavigationSimulator{VehicleParametersE
                 next_action = next_pomdp_action
             # else, runs shield and returns best safe action
             else
+                veh_body = output.vehicle_body
                 next_action = get_best_shielded_action(predicted_vehicle_state, shielding_nbh.position_data, Dt_obs_to_k1, exp_details.one_time_step,
                     shield_get_actions, veh_body, exp_details.human_goal_locations, planner.pomdp, info[:tree], exp_details.user_defined_rng)
             end
+
+            if(print_shielding_time)
+                println("Finished Shielding. Action selected")
+                time_taken = time() - shielding_start_time
+                println("Time Taken : ", time_taken)
+            end
+
         else
             next_action = next_pomdp_action
         end
@@ -421,7 +465,9 @@ end
 Run the experiment for Limited Space Planner
 =#
 function run_experiment!(current_sim_obj::NavigationSimulator{VehicleParametersLSPlanner}, path_planning_details::PathPlanningDetails,
-                                                pomdp_details::POMPDPlanningDetails, exp_details::ExperimentDetails, output::Output)
+                                                pomdp_details::POMPDPlanningDetails, exp_details::ExperimentDetails, output::Output,
+                                                sudden_break_flag = true,
+                                                run_shield = false)
     # initialize variables
     current_time_value = 0.0
     current_vehicle_speed = 0.0
@@ -439,7 +485,6 @@ function run_experiment!(current_sim_obj::NavigationSimulator{VehicleParametersL
     info = nothing
     predicted_vehicle_pos_in_goal = false
     debug = false
-    run_shield = false
     start_time = time()
 
     #=
@@ -460,7 +505,7 @@ function run_experiment!(current_sim_obj::NavigationSimulator{VehicleParametersL
     =#
 
     # Run simulation
-    try
+    # try
     while(!stop_simulation!(current_sim_obj,current_time_value,exp_details,output))
         state_array = [current_sim_obj.vehicle.x, current_sim_obj.vehicle.y, current_sim_obj.vehicle.theta, current_sim_obj.vehicle.v]
         action_array = [current_sim_obj.vehicle_params.controls_sequence[1], current_action.delta_speed]
@@ -549,10 +594,20 @@ function run_experiment!(current_sim_obj::NavigationSimulator{VehicleParametersL
             Define POMDP, POMDP Solver and POMDP Planner
             =#
             rollout_guide = HybridAStarPolicy(modified_vehicle_params.controls_sequence,length(modified_vehicle_params.controls_sequence))
-            planning_pomdp = LimitedSpacePOMDP(pomdp_details,current_sim_obj.env,modified_vehicle_params,rollout_guide)
-            pomdp_solver = DESPOTSolver(bounds=IndependentBounds(DefaultPolicyLB(FunctionPolicy(b->calculate_lower_bound(planning_pomdp, b)),max_depth=pomdp_details.tree_search_max_depth),
-                                calculate_upper_bound,check_terminal=true,consistency_fix_thresh=1e-5),K=pomdp_details.num_scenarios,D=pomdp_details.tree_search_max_depth,
-                                T_max=pomdp_details.planning_time,tree_in_info=true)
+            planning_pomdp = LimitedSpacePOMDP(pomdp_details,current_sim_obj.env,modified_vehicle_params,rollout_guide,sudden_break_flag)
+            lower_bound_func = DefaultPolicyLB(
+                                    FunctionPolicy(b->calculate_lower_bound(planning_pomdp, b)),
+                                    max_depth=pomdp_details.tree_search_max_depth
+                                    )
+            upper_bound_func = calculate_upper_bound
+            pomdp_solver = DESPOTSolver(
+                                bounds=IndependentBounds(lower_bound_func,upper_bound_func,check_terminal=true,consistency_fix_thresh=1e-5),
+                                K=pomdp_details.num_scenarios,D=pomdp_details.tree_search_max_depth,
+                                T_max=pomdp_details.planning_time,
+                                max_trials=1000,
+                                tree_in_info=true,
+                                default_action=get_default_action
+                                )
             planner = POMDPs.solve(pomdp_solver, planning_pomdp);
 
             # Run DESPOT to calculate next action
@@ -623,9 +678,9 @@ function run_experiment!(current_sim_obj::NavigationSimulator{VehicleParametersL
         end
     end
 
-    catch e
-        println("\n Things failed during the simulation. \n The error message is : \n ")
-        println(e)
-    end
+    # catch e
+    #     println("\n Things failed during the simulation. \n The error message is : \n ")
+    #     println(e)
+    # end
     output.time_taken = current_time_value
 end
