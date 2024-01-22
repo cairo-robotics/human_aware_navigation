@@ -164,12 +164,12 @@ function HJBPolicy(HJB_planning_details, exp_details, vehicle_params)
     max_solve_steps = HJB_planning_details.max_solve_steps
     world = exp_details.env
 
-    length = 20.0
-    breadth = 20.0
+    l = world.length
+    b = world.breadth
     max_speed = 2.0
     state_space = SVector{4,Tuple{Float64,Float64}}([
-                    (0.0,world.length), #Range in x
-                    (0.0,world.breadth), #Range in y
+                    (0.0,l), #Range in x
+                    (0.0,b), #Range in y
                     (-pi,pi), #Range in theta
                     (0.0,vehicle_params.max_speed) #Range in v
                     ])
