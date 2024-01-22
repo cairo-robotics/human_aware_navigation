@@ -119,9 +119,11 @@ display(p)
 
 function get_plot(env, vehicle, vehicle_body, vehicle_params, nearby_humans, sensor_data, time_value, exp_details, vehicle_traj)
 
-    snapshot = plot(aspect_ratio=:equal,size=(800,800), dpi=300,
+    l = env.length
+    b = env.breadth
+    snapshot = plot(aspect_ratio=:equal,size=(1000,1000), dpi=300,
         # axis=([], false)
-        xticks=0:4:20, yticks=0:4:20,
+        xticks=0:2:l, yticks=0:2:b,
         # xlabel="x-axis [m]", ylabel="y-axis [m]",
         # legend=:bottom,
         # legend=false
@@ -181,8 +183,8 @@ function get_plot(env, vehicle, vehicle_body, vehicle_params, nearby_humans, sen
             # scatter!(snapshot, [human.x], [human.y], color=nearby_human_color, label="")
             plot!(snapshot, circleShape(human.x, human.y, exp_details.max_risk_distance),color=nearby_human_color,
                         fillalpha=0.2, linecolor=:black, linewidth=2.0, label="", seriestype = [:shape,])
-            Plots.annotate!(human.x, human.y, text(string(human_id), :purple, :center, 15))
-            Plots.annotate!(human.x, human.y, text("H",nearby_human_color, :center, :black, 10))
+            # Plots.annotate!(human.x, human.y, text(string(human_id), :purple, :center, 15))
+            # Plots.annotate!(human.x, human.y, text("H",nearby_human_color, :center, :black, 10))
             continue
         end
         is_sensor_data_human = !(length(findall(x->x==human_id, sensor_data.ids)) == 0)
@@ -190,7 +192,7 @@ function get_plot(env, vehicle, vehicle_body, vehicle_params, nearby_humans, sen
             # scatter!(snapshot, [human.x], [human.y], color=faraway_human_color, label="")
             plot!(snapshot, circleShape(human.x, human.y, exp_details.max_risk_distance),color=faraway_human_color,
                 fillalpha=0.2,linecolor=:black, linewidth=2.0, label="", seriestype = [:shape,])
-            Plots.annotate!(human.x, human.y, text("H", faraway_human_color , :center, :black, 10))
+            # Plots.annotate!(human.x, human.y, text("H", faraway_human_color , :center, :black, 10))
             continue
         end
     end
@@ -235,7 +237,7 @@ function observe(output,exp_details,time_value,vehicle_executed_trajectory)
     e = output.sim_objects[time_value].env
     v = output.sim_objects[time_value].vehicle
     vp = output.sim_objects[time_value].vehicle_params
-    vb = output.vehicle_body_at_origin
+    vb = output.vehicle_body.origin_body
     h = output.sim_objects[time_value].humans
     hp = output.sim_objects[time_value].humans_params
     sd = output.sim_objects[time_value].vehicle_sensor_data
