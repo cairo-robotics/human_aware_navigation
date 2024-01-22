@@ -6,9 +6,9 @@ function get_best_shielded_action(veh, nearby_humans, Dt_obs_to_k1, Dt_plan, get
     x_k1 = SVector(veh.x, veh.y, wrap_between_negative_pi_to_pi(veh.theta), veh.v)
 
     # reformat human positions
-    nbh_pos = []
+    nbh_pos = Vector{Tuple{Float64,Float64}}()
     for h in nearby_humans
-      push!(nbh_pos, [h.x, h.y])
+      push!(nbh_pos, (h.x, h.y))
     end
 
     # run shielding algorithm to produce shielded action set
@@ -31,7 +31,7 @@ function get_best_shielded_action(veh, nearby_humans, Dt_obs_to_k1, Dt_plan, get
     #   - probably due to current inaccuracies with time step, MinkSum, substeps, etc.
     #       -  if shield is designed perfectly (lol), this issue should theoretically never happen
 
-    # find action with best POMDP Q-value in shielded action set 
+    # find action with best POMDP Q-value in shielded action set
     best_q_value = -Inf
     best_action = []
 
@@ -67,83 +67,115 @@ function get_q_value(D, ba)
 end
 
 function shield_get_actions(x, Dt, veh, m)
-    # set change in velocity (Dv) limit
-    delta_speed = 0.5
 
-    # set steering angle (phi) limit
-    Dtheta_lim = deg2rad(45)
-    phi_lim = 0.475
+    delta_speed = m.vehicle_action_delta_speed
+    max_steering_angle = m.max_vehicle_steering_angle
+    max_delta_angle = m.vehicle_action_max_delta_heading_angle
 
     # set HJB safe value limit
     safe_value_lim = 800.0
 
     # vehicle at min velocity
     if(x[4] == 0.0)
-        steering_angle_p = clamp(get_steering_angle(m.vehicle_wheelbase, Dtheta_lim, (x[4]+delta_speed), Dt), 0.0, phi_lim)
-       
-        actions = SVector{8, SVector{2, Float64}}(
-            (-steering_angle_p, delta_speed),
-            (-2/3*steering_angle_p, delta_speed),
-            (-1/3*steering_angle_p, delta_speed),
+        steering_angle = clamp(get_steering_angle(m.vehicle_wheelbase, max_delta_angle, delta_speed, Dt), 0.0, max_steering_angle)
+        actions = (
+            (-steering_angle, delta_speed),
+            (-2/3*steering_angle, delta_speed),
+            (-1/3*steering_angle, delta_speed),
             (0.0, delta_speed),
             (0.0, 0.0),
-            (1/3*steering_angle_p, delta_speed),
-            (2/3*steering_angle_p, delta_speed),
-            (steering_angle_p, delta_speed)
+            (1/3*steering_angle, delta_speed),
+            (2/3*steering_angle, delta_speed),
+            (steering_angle, delta_speed)
             )
 
-        return actions, collect(1:length(actions)), Int64[]
+        return actions, collect(1:length(actions)), ()
 
     # vehicle at max velocity
     elseif(x[4] == m.max_vehicle_speed)
-        steering_angle = clamp(get_steering_angle(m.vehicle_wheelbase, Dtheta_lim, (x[4]), Dt), 0.0, phi_lim)
-        steering_angle_n = clamp(get_steering_angle(m.vehicle_wheelbase, Dtheta_lim, (x[4]-delta_speed), Dt), 0.0, phi_lim)
+        steering_angle = clamp(get_steering_angle(m.vehicle_wheelbase, max_delta_angle, x[4], Dt), 0.0, max_steering_angle)
+        steering_angle_n = clamp(get_steering_angle(m.vehicle_wheelbase, max_delta_angle, x[4]-delta_speed, Dt), 0.0, max_steering_angle)
+        rollout_action = better_reactive_policy(x, delta_speed,safe_value_lim, m.rollout_guide.get_actions, m.rollout_guide.get_cost,
+                                m.one_time_step, m.rollout_guide.q_value_array, m.rollout_guide.value_array,m.rollout_guide.veh,
+                                m.rollout_guide.state_grid)
 
-        rollout_action, q_vals = reactive_policy(x, delta_speed, safe_value_lim, m.rollout_guide.get_actions, m.rollout_guide.get_cost, 
-            m.one_time_step, m.rollout_guide.q_value_array, m.rollout_guide.value_array, m.rollout_guide.veh, m.rollout_guide.state_grid)
-        
-        actions = SVector{11, SVector{2, Float64}}(
-            (-steering_angle, 0.0),
-            (-2/3*steering_angle, 0.0),
-            (-1/3*steering_angle, 0.0),
-            (0.0, -delta_speed),
-            (0.0, 0.0),
-            (1/3*steering_angle, 0.0),
-            (2/3*steering_angle, 0.0),
-            (steering_angle, 0.0),
-            (rollout_action[1], rollout_action[2]),
-            (steering_angle_n, -delta_speed),
-            (-steering_angle_n, -delta_speed)
-            # (-10.0, -10.0)
-            )
+        if( rollout_action[2] == -delta_speed &&
+            (rollout_action[1]!=0.0 || rollout_action[1]!=steering_angle_n || rollout_action[1]!=-steering_angle_n) )
+            actions = (
+                    (-steering_angle,0.0),
+                    (-2/3*steering_angle,0.0),
+                    (-1/3*steering_angle,0.0),
+                    (0.0,-delta_speed),
+                    (0.0,0.0),
+                    (1/3*steering_angle,0.0),
+                    (2/3*steering_angle,0.0),
+                    (steering_angle,0.0),
+                    (rollout_action[1],rollout_action[2]),
+                    (steering_angle_n,-delta_speed),
+                    (-steering_angle_n,-delta_speed),
+                    )
+            return actions, collect(1:length(actions)), (4,10,11)
+        else
+            actions = (
+                    (-steering_angle,0.0),
+                    (-2/3*steering_angle,0.0),
+                    (-1/3*steering_angle,0.0),
+                    (0.0,-delta_speed),
+                    (0.0,0.0),
+                    (1/3*steering_angle,0.0),
+                    (2/3*steering_angle,0.0),
+                    (steering_angle,0.0),
+                    (steering_angle_n,-delta_speed),
+                    (-steering_angle_n,-delta_speed),
+                    )
+            return actions, collect(1:length(actions)), (4,9,10)
+        end
 
-        return actions, collect(1:length(actions)), Int64[4, 10, 11]
-
-    # vehicle between max/min velocity
+    # vehicle between 0.0 and max_velocity
     else
-        steering_angle = clamp(get_steering_angle(m.vehicle_wheelbase, Dtheta_lim, (x[4]), Dt), 0.0, phi_lim)
-        steering_angle_n = clamp(get_steering_angle(m.vehicle_wheelbase, Dtheta_lim, (x[4]-delta_speed), Dt), 0.0, phi_lim)
+        steering_angle = clamp(get_steering_angle(m.vehicle_wheelbase, max_delta_angle, (x[4]), Dt), 0.0, max_steering_angle)
+        steering_angle_n = clamp(get_steering_angle(m.vehicle_wheelbase, max_delta_angle, (x[4]-delta_speed), Dt), 0.0, max_steering_angle)
+        rollout_action = better_reactive_policy(x, delta_speed,safe_value_lim, m.rollout_guide.get_actions, m.rollout_guide.get_cost,
+                                m.one_time_step, m.rollout_guide.q_value_array, m.rollout_guide.value_array,m.rollout_guide.veh,
+                                m.rollout_guide.state_grid)
 
-        rollout_action, q_vals = reactive_policy(x, delta_speed, safe_value_lim, m.rollout_guide.get_actions, m.rollout_guide.get_cost, 
-            m.one_time_step, m.rollout_guide.q_value_array, m.rollout_guide.value_array, m.rollout_guide.veh, m.rollout_guide.state_grid)
-
-        actions = SVector{12, SVector{2, Float64}}(
-            (-steering_angle, 0.0),
-            (-2/3*steering_angle, 0.0),
-            (-1/3*steering_angle, 0.0),
-            (0.0, -delta_speed),
-            (0.0, 0.0),
-            (0.0, delta_speed),
-            (1/3*steering_angle, 0.0),
-            (2/3*steering_angle, 0.0),
-            (steering_angle, 0.0),
-            (rollout_action[1], rollout_action[2]),
-            (steering_angle_n, -delta_speed),
-            (-steering_angle_n, -delta_speed)
-            # (-10.0, -10.0)
+        if(
+                ( rollout_action[2] == -delta_speed && (rollout_action[1] != steering_angle_n
+                    || rollout_action[1] != -steering_angle_n) || rollout_action[1] != 0.0 ) ||
+                ( rollout_action[2] == delta_speed && rollout_action[1] != 0.0 )
             )
+            actions = (
+                    (-steering_angle, 0.0),
+                    (-2/3*steering_angle, 0.0),
+                    (-1/3*steering_angle, 0.0),
+                    (0.0, -delta_speed),
+                    (0.0, 0.0),
+                    (0.0, delta_speed),
+                    (1/3*steering_angle, 0.0),
+                    (2/3*steering_angle, 0.0),
+                    (steering_angle, 0.0),
+                    (rollout_action[1],rollout_action[2]),
+                    (steering_angle_n,-delta_speed),
+                    (-steering_angle_n,-delta_speed),
+                    )
 
-        return actions, collect(1:length(actions)), Int64[4, 11, 12]
+            return actions, collect(1:length(actions)), (4, 11, 12)
+        else
+            actions = (
+                    (-steering_angle, 0.0),
+                    (-2/3*steering_angle, 0.0),
+                    (-1/3*steering_angle, 0.0),
+                    (0.0, -delta_speed),
+                    (0.0, 0.0),
+                    (0.0, delta_speed),
+                    (1/3*steering_angle, 0.0),
+                    (2/3*steering_angle, 0.0),
+                    (steering_angle, 0.0),
+                    (steering_angle_n,-delta_speed),
+                    (-steering_angle_n,-delta_speed),
+                    )
+            return actions, collect(1:length(actions)), (4, 10, 11)
+        end
     end
 end
 
