@@ -43,8 +43,21 @@ function get_vehicle_body_origin(vehicle_center_x_from_origin, vehicle_center_y_
     x0_max = vehicle_center_x_from_origin + 1/2*vehicle_length
     y0_min = vehicle_center_y_from_origin - 1/2*vehicle_breadth
     y0_max = vehicle_center_y_from_origin + 1/2*vehicle_breadth
-    origin_body = VPolygon([[x0_min, y0_min], [x0_max, y0_min], [x0_max, y0_max], [x0_min, y0_max]])
+    origin_body = VPolygon([
+                    SVector(x0_min, y0_min),
+                    SVector(x0_max, y0_min),
+                    SVector(x0_max, y0_max),
+                    SVector(x0_min, y0_max)
+                    ])
     return origin_body
+end
+
+function get_vehicle_body(vehicle_params)
+    wheelbase = vehicle_params.wheelbase
+    body_dims = SVector(vehicle_params.length, vehicle_params.breadth)
+    origin_to_cent_vector = SVector(vehicle_params.dist_origin_to_center, 0.0)
+    vehicle_body = BellmanPDEs.define_vehicle(wheelbase, body_dims, origin_to_cent_vector, vehicle_params.max_steering_angle, vehicle_params.max_speed)
+    return vehicle_body
 end
 
 function in_obstacle(px,py,obstacle,padding=0.0)

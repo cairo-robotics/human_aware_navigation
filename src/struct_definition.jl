@@ -206,7 +206,7 @@ mutable struct Output
     number_sudden_stops::Int64
     number_risky_scenarios::Int64
     time_taken::Float64
-    vehicle_body_at_origin::VPolygon
+    vehicle_body::VehicleBody
     vehicle_ran_into_boundary_wall::Bool
     vehicle_ran_into_obstacle::Bool
     vehicle_reached_goal::Bool

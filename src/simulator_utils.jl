@@ -23,7 +23,7 @@ function in_safe_area(px,py,vehicle_x,vehicle_y,world)
             return false
         end
     end
-    if(is_within_range(px,py,vehicle_x,vehicle_y,2.0))
+    if(is_within_range(px,py,vehicle_x,vehicle_y,5.0))
         return false
     end
     return true
@@ -221,6 +221,8 @@ function get_nearby_humans(sim_obj,num_nearby_humans,min_safe_distance_from_huma
     ids = sim_obj.vehicle_sensor_data.ids
     current_belief = sim_obj.vehicle_sensor_data.belief
     vehicle = sim_obj.vehicle
+    min_distance_behind = min_safe_distance_from_human+sim_obj.vehicle_params.radius
+    # min_distance_behind = 5.0
 
     for i in 1:length(humans)
         human = humans[i]
@@ -233,7 +235,7 @@ function get_nearby_humans(sim_obj,num_nearby_humans,min_safe_distance_from_huma
             priority_queue_nearby_humans[(human,human_id,human_belief)] = euclidean_distance
         elseif((2*pi - difference_in_angles) <= cone_half_angle)
             priority_queue_nearby_humans[(human,human_id,human_belief)] = euclidean_distance
-        elseif(euclidean_distance<=min_safe_distance_from_human+sim_obj.vehicle_params.radius)
+        elseif(euclidean_distance<=min_distance_behind)
             priority_queue_nearby_humans[(human,human_id,human_belief)] = euclidean_distance
         end
     end

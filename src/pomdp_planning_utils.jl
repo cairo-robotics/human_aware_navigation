@@ -5,6 +5,7 @@ import POMDPs: initialstate_distribution, actions, gen, discount, isterminal
 using POMDPModels, POMDPTools, ARDESPOT
 using ParticleFilters
 using LinearAlgebra
+using StaticArrays
 
 #=
 Function to check terminal state
