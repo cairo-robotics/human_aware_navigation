@@ -46,15 +46,15 @@ Initialization
 # environment_name = "big_obstacle_25x25"
 # environment_name = "L_shape_25x25"
 # environment_name = "no_obstacles_50x50"
-# environment_name = "small_obstacles_50x50"
+environment_name = "small_obstacles_50x50"
 # environment_name = "big_obstacle_50x50"
-environment_name = "L_shape_50x50"
+# environment_name = "L_shape_50x50"
 
 # environment_name = "indoor_tables_25x25"
 
 filename = "configs/"*environment_name*".jl"
 include(filename)
-input_config = L_shape_50x50
+input_config = small_obstacles_50x50
 rollout_guide_filename = "./src/rollout_guides/HJB_rollout_guide_"*environment_name*".jld2"
 
 
@@ -127,7 +127,7 @@ end
 Define POMDP, POMDP Solver and POMDP Planner
 =#
 sol_rng = MersenneTwister(19)
-SB_flag = false  #Apply Sudden Break Flag
+SB_flag = true  #Apply Sudden Break Flag
 extended_space_pomdp = ExtendedSpacePOMDP(pomdp_details,env,veh_params,rollout_guide,SB_flag);
 lower_bound_func = DefaultPolicyLB(
                         FunctionPolicy(b->calculate_lower_bound(extended_space_pomdp, b)),

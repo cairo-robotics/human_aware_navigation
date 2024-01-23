@@ -98,6 +98,8 @@ function run_pipeline!(output_obj)
                 push!(baseline,baseline_result)
             end
 
+            GC.gc()
+
             if(random_flag)
                 input_config.rng = MersenneTwister(seed)
                 println("************ Running Experiment Number : ", i, " with ES Planner - Random Rollouts ************")
@@ -107,6 +109,8 @@ function run_pipeline!(output_obj)
                 push!(esp_random,esp_random_result)
             end
 
+            GC.gc()
+
             if(straight_line_flag)
                 input_config.rng = MersenneTwister(seed)
                 println("************ Running Experiment Number : ", i, " with ES Planner - Straight Line Rollouts ************")
@@ -115,6 +119,8 @@ function run_pipeline!(output_obj)
                 esp_sl_result = PipelineIndividualOutput(e)
                 push!(esp_sl,esp_sl_result)
             end
+
+            GC.gc()
 
             if(HJB_flag)
                 input_config.rng = MersenneTwister(seed)
@@ -143,14 +149,14 @@ function get_time_results(experimental_data)
     num_successful_trials = length(successful_trials)
     println("Number of Successful trials where the vehicle reached the goal : ", num_successful_trials)
 
-    #Filter out the results where the vehicle had no collissions and reached the goal
-    collission_free_trials = filter(x->x.number_risky_scenarios == 0, successful_trials)
-    num_collission_free_trials = length(collission_free_trials)
-    println("Number of successful and collission free trials : ", num_collission_free_trials)
+    #Filter out the results where the vehicle had no collisions and reached the goal
+    collision_free_trials = filter(x->x.number_risky_scenarios == 0, successful_trials)
+    num_collision_free_trials = length(collision_free_trials)
+    println("Number of successful and collision free trials : ", num_collision_free_trials)
 
     #Calculate mean and std error on time
-    mean_time = mean(d.time_taken for d in collission_free_trials)
-    std_error_time = std(d.time_taken for d in collission_free_trials)/sqrt(num_collission_free_trials)
+    mean_time = mean(d.time_taken for d in collision_free_trials)
+    std_error_time = std(d.time_taken for d in collision_free_trials)/sqrt(num_collision_free_trials)
     println("Trajectory Time (in seconds) : ", mean_time, " +/- ", std_error_time)
 
     return(mean_time,std_error_time)
@@ -166,50 +172,50 @@ function get_sudden_break_results(experimental_data)
     num_successful_trials = length(successful_trials)
     println("Number of Successful trials where the vehicle reached the goal : ", num_successful_trials)
 
-    #Filter out the results where the vehicle had no collissions and reached the goal
-    collission_free_trials = filter(x->x.number_risky_scenarios == 0, successful_trials)
-    num_collission_free_trials = length(collission_free_trials)
-    println("Number of successful and collission free trials : ", num_collission_free_trials)
+    #Filter out the results where the vehicle had no collisions and reached the goal
+    collision_free_trials = filter(x->x.number_risky_scenarios == 0, successful_trials)
+    num_collision_free_trials = length(collision_free_trials)
+    println("Number of successful and collision free trials : ", num_collision_free_trials)
 
     #Calculate mean and std error on number of SB actions
-    mean_SB = mean(d.number_sudden_stops for d in collission_free_trials)
-    std_error_SB = std(d.number_sudden_stops for d in collission_free_trials)/sqrt(num_collission_free_trials)
+    mean_SB = mean(d.number_sudden_stops for d in collision_free_trials)
+    std_error_SB = std(d.number_sudden_stops for d in collision_free_trials)/sqrt(num_collision_free_trials)
     println("Number of Sudden Break actions : ", mean_SB, " +/- ", std_error_SB)
 
     return(mean_SB,std_error_SB)
 end
 
 
-function get_num_collissions(experimental_data, min_dist)
+function get_num_collisions(experimental_data, min_dist)
 
     #Filter out the results where the vehicle reached the goal
     successful_trials = filter(x->x.vehicle_reached_goal == true, experimental_data)
     num_successful_trials = length(successful_trials)
     println("Number of Successful trials where the vehicle reached the goal : ", num_successful_trials)
 
-    collission_per_successful_experiment = [count_num_collissions(d.risky_scenarios,min_dist) for d in successful_trials]
+    collision_per_successful_experiment = [count_num_collisions(d.risky_scenarios,min_dist) for d in successful_trials]
 
     num_unsafe_experiments = 0
-    for collission_num in collission_per_successful_experiment
-        if(collission_num!=0)
+    for collision_num in collision_per_successful_experiment
+        if(collision_num!=0)
             num_unsafe_experiments+=1
         end
     end
 
-    println("Number of Experiments where collissions happened : ", num_unsafe_experiments)
+    println("Number of Experiments where collisions happened : ", num_unsafe_experiments)
 
-    #Calculate mean and std error on number of collissions
-    mean_collissions = mean(collission_per_successful_experiment)
-    std_error_collissions = std(collission_per_successful_experiment)/sqrt(num_successful_trials)
-    println("Number of Collissions : ", mean_collissions, " +/- ", std_error_collissions)
+    #Calculate mean and std error on number of collisions
+    mean_collisions = mean(collision_per_successful_experiment)
+    std_error_collisions = std(collision_per_successful_experiment)/sqrt(num_successful_trials)
+    println("Number of collisions : ", mean_collisions, " +/- ", std_error_collisions)
 
-    return(mean_collissions,std_error_collissions)
+    return(mean_collisions,std_error_collisions)
 end
 
-function count_num_collissions(risky_scenarios, min_safe_distance_from_human)
+function count_num_collisions(risky_scenarios, min_safe_distance_from_human)
 
     distinct_human_ids = Set{Int}()
-    num_distinct_collissions = 0
+    num_distinct_collisions = 0
 
     for (time_stamp,scenario) in risky_scenarios
         vehicle = scenario.vehicle
@@ -225,15 +231,15 @@ function count_num_collissions(risky_scenarios, min_safe_distance_from_human)
             if(euclidean_distance<=(min_safe_distance_from_human))
                 colliding_human_id = ids[index]
                 if( !(colliding_human_id in distinct_human_ids))
-                    num_distinct_collissions += 1
+                    num_distinct_collisions += 1
                     push!(distinct_human_ids,colliding_human_id)
                 end
             end
         end
     end
 
-    @assert length(distinct_human_ids) == num_distinct_collissions
-    return num_distinct_collissions
+    @assert length(distinct_human_ids) == num_distinct_collisions
+    return num_distinct_collisions
 end
 
 #=
@@ -250,9 +256,11 @@ environment_name = "small_obstacles_50x50"
 environment_name = "big_obstacle_50x50"
 environment_name = "L_shape_50x50"
 
+environment_name = "indoor_tables_25x25"
+
 filename = "src/configs/"*environment_name*".jl"
 include(filename)
-input_config = L_shape_50x50
+input_config = indoor_tables_25x25
 rollout_guide_filename = "./src/rollout_guides/HJB_rollout_guide_"*environment_name*".jld2"
 s = load(rollout_guide_filename)
 rollout_guide = s["rollout_guide"];
@@ -274,35 +282,21 @@ data_sb_no_shield_yes = PipelineOutput(environment_name,num_experiments,false,tr
 run_pipeline!(data_sb_no_shield_yes)
 
 
+data = data_sb_no_shield_no;
+data = data_sb_yes_shield_no;
 
-get_time_results(data_sb_no_shield_no.baseline)
-get_time_results(data_sb_no_shield_no.esp_hjb)
-get_time_results(data_sb_no_shield_no.esp_random)
-get_time_results(data_sb_no_shield_no.esp_sl)
+get_time_results(data.baseline)
+get_time_results(data.esp_hjb)
+get_time_results(data.esp_random)
+get_time_results(data.esp_sl)
 
-get_sudden_break_results(data_sb_no_shield_no.baseline)
-get_sudden_break_results(data_sb_no_shield_no.esp_hjb)
-get_sudden_break_results(data_sb_no_shield_no.esp_random)
-get_sudden_break_results(data_sb_no_shield_no.esp_sl)
+get_sudden_break_results(data.baseline)
+get_sudden_break_results(data.esp_hjb)
+get_sudden_break_results(data.esp_random)
+get_sudden_break_results(data.esp_sl)
 
-get_num_collissions(data_sb_no_shield_no.baseline,1.0)
-get_num_collissions(data_sb_no_shield_no.esp_hjb,1.0)
-get_num_collissions(data_sb_no_shield_no.esp_random,1.0)
-get_num_collissions(data_sb_no_shield_no.esp_sl,1.0)
-
-
-get_time_results(data_sb_yes_shield_no.baseline)
-get_time_results(data_sb_yes_shield_no.esp_hjb)
-get_time_results(data_sb_yes_shield_no.esp_random)
-get_time_results(data_sb_yes_shield_no.esp_sl)
-
-get_sudden_break_results(data_sb_yes_shield_no.baseline)
-get_sudden_break_results(data_sb_yes_shield_no.esp_hjb)
-get_sudden_break_results(data_sb_yes_shield_no.esp_random)
-get_sudden_break_results(data_sb_yes_shield_no.esp_sl)
-
-get_num_collissions(data_sb_yes_shield_no.baseline,1.0)
-get_num_collissions(data_sb_yes_shield_no.esp_hjb,1.0)
-get_num_collissions(data_sb_yes_shield_no.esp_random,1.0)
-get_num_collissions(data_sb_yes_shield_no.esp_sl,1.0)
+get_num_collisions(data.baseline,1.0)
+get_num_collisions(data.esp_hjb,1.0)
+get_num_collisions(data.esp_random,1.0)
+get_num_collisions(data.esp_sl,1.0)
 =#

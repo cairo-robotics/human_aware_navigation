@@ -1,5 +1,5 @@
 small_obstacles_50x50 =  InputParameters(
-    MersenneTwister(), #=rng::AbstractRNG=#
+    MersenneTwister(0x595a3fa9), #=rng::AbstractRNG=#
     50.0, #=env_length::Float64=#
     50.0, #=env_breadth::Float64=#
     ObstacleLocation[ObstacleLocation(9,14,2.5), ObstacleLocation(10,29,2.5),
@@ -55,4 +55,6 @@ Weird scenarios
 0x6d5e8914
 never reached goal, causes local minima bellman problems - 0xc63596b3
 never reached goal - 0x5b336665, 0x7961389e
+
+collision - 0x595a3fa9
 =#
