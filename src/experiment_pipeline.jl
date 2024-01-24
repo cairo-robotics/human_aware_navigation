@@ -256,17 +256,17 @@ environment_name = "small_obstacles_50x50"
 environment_name = "big_obstacle_50x50"
 environment_name = "L_shape_50x50"
 
-environment_name = "indoor_tables_25x25"
+environment_name = "small_obstacles_50x50"
 
 filename = "src/configs/"*environment_name*".jl"
 include(filename)
-input_config = indoor_tables_25x25
+input_config = small_obstacles_50x50
 rollout_guide_filename = "./src/rollout_guides/HJB_rollout_guide_"*environment_name*".jld2"
 s = load(rollout_guide_filename)
 rollout_guide = s["rollout_guide"];
 sudden_break = false
 run_shield = false
-num_experiments = 5
+num_experiments = 1
 
 
 data_sb_no_shield_no = PipelineOutput(environment_name,num_experiments,false,false,
