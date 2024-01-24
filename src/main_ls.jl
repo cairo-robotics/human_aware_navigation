@@ -1,5 +1,5 @@
 using BellmanPDEs
-using ProfileView
+# using ProfileView
 using Revise
 include("struct_definition.jl")
 include("environment.jl")

@@ -375,7 +375,7 @@ environment_name = "small_obstacles_50x50"
 
 filename = "src/configs/"*environment_name*".jl"
 include(filename)
-input_config = small_obstacles_50x50
+input_config = L_shape_50x50
 rollout_guide_filename = "./src/rollout_guides/HJB_rollout_guide_"*environment_name*".jld2"
 s = load(rollout_guide_filename)
 rollout_guide = s["rollout_guide"];
