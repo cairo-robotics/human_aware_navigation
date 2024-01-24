@@ -190,7 +190,7 @@ function POMDPs.gen(m::LimitedSpacePOMDP, s, a, rng)
     vehicle_center_y = s.vehicle_y + m.vehicle_D*sin(s.vehicle_theta)
 
     for human in s.nearby_humans
-        if(s.vehicle_v != 0.0)
+        if(s.vehicle_v != 0.0 && a.delta_speed != -10.0 )
             if( is_within_range(vehicle_center_x, vehicle_center_y, human.x, human.y, m.min_safe_distance_from_human+m.vehicle_R) )
                 # println("Collision with this human " ,s.nearby_humans[human_index] , " ", time_index )
                 # println("Vehicle's position is " ,vehicle_path[time_index] , "\nHuman's position is ", intermediate_human_location )

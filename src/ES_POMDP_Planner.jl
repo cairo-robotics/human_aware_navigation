@@ -326,12 +326,8 @@ function POMDPs.gen(m::ExtendedSpacePOMDP, s, a, rng)
 
     vehicle_center_x = s.vehicle_x + m.vehicle_D*cos(s.vehicle_theta)
     vehicle_center_y = s.vehicle_y + m.vehicle_D*sin(s.vehicle_theta)
-    # return
     for human in s.nearby_humans
-    # for i in 1:length(s.nearby_humans)
-        # human = s.nearby_humans[i]
-        # println("jj")
-        if(s.vehicle_v != 0.0)
+        if(s.vehicle_v != 0.0 && a.delta_speed != -10.0)
             if( is_within_range(vehicle_center_x, vehicle_center_y, human.x, human.y, m.min_safe_distance_from_human+m.vehicle_R) )
                 # println("Collision with this human " ,s.nearby_humans[human_index] , " ", time_index )
                 # println("Vehicle's position is " ,vehicle_path[time_index] , "\nHuman's position is ", intermediate_human_location )
@@ -377,7 +373,6 @@ function POMDPs.gen(m::ExtendedSpacePOMDP, s, a, rng)
         # println("Goal reached")
         new_vehicle_position = (-100.0, -100.0, -100.0)
         vehicle_reached_goal = true
-        # next_human_states = human_state[]
         observed_positions = Location[ Location(-50.0,-50.0) ]
         sp = StateExtendedSpacePOMDP(new_vehicle_position[1],new_vehicle_position[2],new_vehicle_position[3],s.vehicle_v,next_human_states)
         r = vehicle_goal_reached_reward(vehicle_reached_goal, m.goal_reached_reward)
