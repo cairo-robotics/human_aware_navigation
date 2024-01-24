@@ -242,6 +242,121 @@ function count_num_collisions(risky_scenarios, min_safe_distance_from_human)
     return num_distinct_collisions
 end
 
+
+function get_num_outperformed(baseline, proposed_planner)
+
+    num_experiments = length(baseline)
+    num_outperformed = 0
+
+    for i in 1:num_experiments
+        if( baseline[i].vehicle_reached_goal && proposed_planner[i].vehicle_reached_goal &&
+            baseline[i].number_risky_scenarios == 0 && proposed_planner[i].number_risky_scenarios == 0
+            )
+            if(baseline[i].time_taken > proposed_planner[i].time_taken)
+                num_outperformed += 1
+            end
+        end
+    end
+
+    println("Number of Experiments where Proposed Approach outperformed the baseline : ", num_outperformed)
+    return num_outperformed
+end
+
+function extract_one_executed_path(output)
+
+    path_x = Float64[]
+    path_y = Float64[]
+    for (i,sim_obj) in output.sim_objects
+        vehicle = sim_obj.vehicle
+        push!(path_x, vehicle.x)
+        push!(path_y, vehicle.y)
+    end
+    return path_x,path_y
+end
+
+function extract_all_executed_paths(results)
+
+    all_executed_paths = Vector{Pair{Int64, Tuple{Vector{Float64}, Vector{Float64}}}}()
+    num_experiments = length(results)
+
+    for i in 1:num_experiments
+        px,py = extract_one_executed_path(results[i])
+        push!( all_executed_paths, i=> (px,py) )
+    end
+
+    return all_executed_paths
+end
+
+function visualize_env(env, vehicle_goal, exp_details)
+
+    l = env.length
+    b = env.breadth
+    snapshot = plot(aspect_ratio=:equal,size=(1000,1000), dpi=300,
+        # axis=([], false)
+        xticks=0:2:l, yticks=0:2:b,
+        # xlabel="x-axis [m]", ylabel="y-axis [m]",
+        # legend=:bottom,
+        # legend=false
+        )
+
+    #Plot Workspace
+    turf_color = :green
+    plot!(snapshot, rectangleShape(0.0,0.0,env.length,env.breadth),opacity=0.1,color=turf_color,linewidth=2.0,linecolor=:black,label="")
+
+
+    #Plot External Anchors
+    anchor_dist = 0.5
+    scatter!(snapshot,
+        [0.0 - anchor_dist, env.length + anchor_dist, env.length + anchor_dist, 0.0 - anchor_dist],
+        [0.0 - anchor_dist, 0.0 - anchor_dist, env.breadth + anchor_dist, env.breadth + anchor_dist],
+        markeralpha=0.0, fillalpha=0.0, label="")
+
+    #Plot Obstacles
+    obstacle_color = :black
+    for obs in env.obstacles
+        plot!(snapshot, circleShape(obs.x,obs.y,obs.r), color=obstacle_color, linewidth=2.0, linecolor = obstacle_color,
+            legend=false, fillalpha=0.4, aspect_ratio=1, label="", seriestype = [:shape,])
+        Plots.annotate!(snapshot,obs.x, obs.y, text("Obs", obstacle_color, :center, 10))
+    end
+
+
+    #Plot Human Goals
+    human_goals = get_human_goals(env)
+    offset = 0.125 * 0
+    human_goal_color = :green
+    for i in 1:length(human_goals)
+        goal_name = "G"*string(i)
+        human_goals[i].x > 1/2*env.length ? x_dir = 1 : x_dir = -1
+        human_goals[i].y > 1/2*env.breadth ? y_dir = 1 : y_dir = -1
+        Plots.annotate!(human_goals[i].x + x_dir*offset, human_goals[i].y + y_dir*offset, text(goal_name, :black, :center, 10))
+        plot!(snapshot, circleShape(human_goals[i].x + x_dir*offset,human_goals[i].y + y_dir*offset,exp_details.max_risk_distance),
+                    color=human_goal_color, linewidth=2.0, linecolor = :black, fillalpha=0.2, aspect_ratio=1, label="", seriestype = [:shape,])
+    end
+
+
+    #Plot Vehicle Goal
+    vehicle_goal_color = :yellow
+    Plots.annotate!(snapshot,vehicle_goal.x, vehicle_goal.y, text("G", :darkgreen, :center, 10))
+    plot!(snapshot, circleShape(vehicle_goal.x, vehicle_goal.y, exp_details.radius_around_vehicle_goal),
+        color=vehicle_goal_color, fillalpha=0.2, linecolor=:black, linewidth=2.0, label="", seriestype = [:shape,])
+
+
+    return snapshot
+end
+
+function visualize_all_executed_paths( input_config, all_executed_paths, c)
+    exp_details = ExperimentDetails(input_config)
+    env = generate_environment(input_config.env_length,input_config.env_breadth,input_config.obstacles)
+    veh_goal = Location(input_config.veh_goal_x,input_config.veh_goal_y)
+    snapshot = visualize_env(env, veh_goal, exp_details)
+    for (i,path) in all_executed_paths
+        px,py = path[1],path[2]
+        plot!(snapshot, px, py, linewidth=2,label="",color=c)
+    end
+    display(snapshot)
+    return snapshot
+end
+
 #=
 Pipeline code
 
@@ -299,4 +414,16 @@ get_num_collisions(data.baseline,1.0)
 get_num_collisions(data.esp_hjb,1.0)
 get_num_collisions(data.esp_random,1.0)
 get_num_collisions(data.esp_sl,1.0)
+
+
+get_num_outperformed(data.baseline, data.esp_hjb)
+get_num_outperformed(data.baseline, data.esp_random)
+get_num_outperformed(data.baseline, data.esp_sl)
+
+all_paths_hjb = extract_all_executed_paths(data.esp_hjb);
+p = visualize_all_executed_paths(input_config,all_paths_hjb, color);
+
+all_paths_baseline = extract_all_executed_paths(data.baseline);
+p = visualize_all_executed_paths(input_config, all_paths_baseline, color);
+
 =#
