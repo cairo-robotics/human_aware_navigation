@@ -2,7 +2,7 @@
 
 julia_version = "1.9.3"
 manifest_format = "2.0"
-project_hash = "bb24feacc6ee126614172f0191008f3950b78e16"
+project_hash = "03233b404da8d76cd47cc75f3a1a35f08bf0fe29"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "41c37aa88889c171f1300ceac1313c06e891d245"
@@ -108,7 +108,7 @@ version = "0.2.3"
 
 [[deps.BellmanPDEs]]
 deps = ["GridInterpolations", "JLD2", "LazySets", "POMDPTools", "Plots", "Random", "StaticArrays", "StaticArraysCore", "UnicodePlots"]
-git-tree-sha1 = "a843cbba4f169a48c4ba70651fee101d5dfc867a"
+git-tree-sha1 = "aae0c3a9f6993f943741ece13a6408353aaed6c5"
 repo-rev = "main"
 repo-url = "https://github.com/himanshugupta1009/BellmanPDEs.jl"
 uuid = "f5c2d71c-83f8-4255-b29d-cee59dfde9e8"
@@ -329,9 +329,9 @@ uuid = "e3df1716-f71e-5df9-9e2d-98e193103c45"
 version = "0.3.3"
 
 [[deps.DataAPI]]
-git-tree-sha1 = "8da84edb865b0b5b0100c0666a9bc9a0b71c553c"
+git-tree-sha1 = "abe83f3a2f1b857aac70ef8b269080af17764bbe"
 uuid = "9a962f9c-6df0-11e9-0e5d-c546b8b5ee8a"
-version = "1.15.0"
+version = "1.16.0"
 
 [[deps.DataFrames]]
 deps = ["Compat", "DataAPI", "DataStructures", "Future", "InlineStrings", "InvertedIndices", "IteratorInterfaceExtensions", "LinearAlgebra", "Markdown", "Missings", "PooledArrays", "PrecompileTools", "PrettyTables", "Printf", "REPL", "Random", "Reexport", "SentinelArrays", "SortingAlgorithms", "Statistics", "TableTraits", "Tables", "Unicode"]
@@ -1254,9 +1254,9 @@ version = "0.12.166"
 
 [[deps.LoweredCodeUtils]]
 deps = ["JuliaInterpreter"]
-git-tree-sha1 = "38756922d32476c8f41f73560b910fc805a5a103"
+git-tree-sha1 = "20ce1091ba18bcdae71ad9b71ee2367796ba6c48"
 uuid = "6f1432cf-f94c-5a45-995e-cdbf5db27b0b"
-version = "2.4.3"
+version = "2.4.4"
 
 [[deps.MCTS]]
 deps = ["Colors", "D3Trees", "POMDPLinter", "POMDPTools", "POMDPs", "Printf", "ProgressMeter", "Random"]
@@ -1517,14 +1517,6 @@ deps = ["CommonRLInterface", "DataFrames", "Distributed", "Distributions", "Line
 git-tree-sha1 = "6b7e405f2c1905aff6f07ee4d241fd608d289d66"
 uuid = "7588e00f-9cae-40de-98dc-e0c70c48cdd7"
 version = "0.1.6"
-
-[[deps.POMDPTrees]]
-deps = ["ARDESPOT", "AbstractTrees", "D3Trees", "Printf"]
-git-tree-sha1 = "1be5449ce68dc704d955508b0920ba540b631088"
-repo-rev = "main"
-repo-url = "/home/himanshu/Desktop/POMDPTrees.jl"
-uuid = "67a3eb49-1e8c-4d47-bb2b-9a6005ddfcf9"
-version = "0.1.0"
 
 [[deps.POMDPs]]
 deps = ["Distributions", "Graphs", "NamedTupleTools", "POMDPLinter", "Pkg", "Random", "Statistics"]
