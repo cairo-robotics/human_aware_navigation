@@ -1,5 +1,5 @@
 #MersenneTwister(0x343b2563)
-small_obstacles_20x20 =  InputParameters(
+input_config =  InputParameters(
     MersenneTwister(1), #=rng::AbstractRNG=#
     20.0, #=env_length::Float64=#
     20.0, #=env_breadth::Float64=#

@@ -1,4 +1,4 @@
-aspen2 =  InputParameters(
+input_config =  InputParameters(
     MersenneTwister(), #=rng::AbstractRNG=#
     15.518, #=env_length::Float64=#
     21.036, #=env_breadth::Float64=#

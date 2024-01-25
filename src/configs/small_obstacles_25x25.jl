@@ -1,5 +1,5 @@
-small_obstacles_25x25 =  InputParameters(
-    MersenneTwister(), #=rng::AbstractRNG=#
+input_config =  InputParameters(
+    MersenneTwister(0x802517d6), #=rng::AbstractRNG=#
     25.0, #=env_length::Float64=#
     25.0, #=env_breadth::Float64=#
     ObstacleLocation[ObstacleLocation(5.125,6.875,1.125), ObstacleLocation(6.5,18.25,1.5),

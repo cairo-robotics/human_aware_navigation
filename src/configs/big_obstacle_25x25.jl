@@ -1,4 +1,4 @@
-big_obstacle_25x25 =  InputParameters(
+input_config =  InputParameters(
     MersenneTwister(), #=rng::AbstractRNG=#
     25.0, #=env_length::Float64=#
     25.0, #=env_breadth::Float64=#

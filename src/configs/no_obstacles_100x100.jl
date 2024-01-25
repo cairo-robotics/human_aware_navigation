@@ -1,4 +1,4 @@
-no_obstacles_100x100 =  InputParameters(
+input_config =  InputParameters(
     MersenneTwister(0x62014574), #=rng::AbstractRNG=#
     100.0, #=env_length::Float64=#
     100.0, #=env_breadth::Float64=#

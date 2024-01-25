@@ -1,4 +1,4 @@
-no_obstacles_50x50 =  InputParameters(
+input_config =  InputParameters(
     MersenneTwister(), #=rng::AbstractRNG=#
     50.0, #=env_length::Float64=#
     50.0, #=env_breadth::Float64=#
@@ -20,7 +20,7 @@ no_obstacles_50x50 =  InputParameters(
     0.5, #=veh_path_planning_v::Float64=#
     20.0, #=lidar_range::Float64=#
     6, #=num_nearby_humans::Int64=#
-    3/3*pi, #=cone_half_angle::Float64=#
+    2/3*pi, #=cone_half_angle::Float64=#
     0.98, #1.0, #=pomdp_discount_factor::Float64=#
     1.0, #=min_safe_distance_from_human::Float64=#
     0.0, #=min_safe_distance_from_obstacle::Float64=#
@@ -43,5 +43,5 @@ no_obstacles_50x50 =  InputParameters(
     0.1, #=simulator_time_step::Float64=#
     0.1, #=update_sensor_data_time_interval::Float64=#
     0.1, #=buffer_time::Float64=#
-    100.0 #=MAX_TIME_LIMIT::Float64=#
+    200.0 #=MAX_TIME_LIMIT::Float64=#
 )
