@@ -35,6 +35,7 @@ end
 struct PipelineOutput{I,R}
     environment_name::String
     num_experiments::Int64
+    num_humans::Int64
     sudden_break_flag::Bool
     run_shield_flag::Bool
     seeds::Array{UInt32,1}
@@ -46,7 +47,7 @@ struct PipelineOutput{I,R}
     esp_hjb::Array{PipelineIndividualOutput,1}
 end
 
-function PipelineOutput(env_name, num_experiments, sudden_break, run_shield,
+function PipelineOutput(env_name, num_experiments, num_humans, sudden_break, run_shield,
                         config, rollout_guide, seeds=nothing)
 
     if(isnothing(seeds))
@@ -62,6 +63,7 @@ function PipelineOutput(env_name, num_experiments, sudden_break, run_shield,
     return PipelineOutput(
         env_name,
         num_experiments,
+        num_humans,
         sudden_break,
         run_shield,
         seeds,
@@ -82,8 +84,9 @@ function run_pipeline!(output_obj)
     straight_line_flag = true
     HJB_flag = true
 
-    (;num_experiments, sudden_break_flag, run_shield_flag, seeds,
+    (;num_experiments, num_humans, sudden_break_flag, run_shield_flag, seeds,
     input_config,rollout_guide,baseline,esp_random,esp_sl,esp_hjb) = output_obj
+    input_config.num_humans_env = num_humans
 
     try
         for i in 1:num_experiments
@@ -357,6 +360,19 @@ function visualize_all_executed_paths( input_config, all_executed_paths, c)
     return snapshot
 end
 
+function run_experiment(environment_name, num_experiments, num_humans, sudden_break, run_shield )
+    filename = "src/configs/"*environment_name*".jl"
+    include(filename)
+    rollout_guide_filename = "./src/rollout_guides/HJB_rollout_guide_"*environment_name*".jld2"
+    s = load(rollout_guide_filename)
+    rollout_guide = s["rollout_guide"];
+    data = PipelineOutput(environment_name,num_experiments,num_humans,sudden_break,
+                            run_shield,input_config,rollout_guide);
+    run_pipeline!(data)
+    return data
+end
+
+
 #=
 Pipeline code
 
@@ -375,7 +391,7 @@ environment_name = "small_obstacles_50x50"
 
 filename = "src/configs/"*environment_name*".jl"
 include(filename)
-input_config = L_shape_50x50
+input_config = small_obstacles_50x50
 rollout_guide_filename = "./src/rollout_guides/HJB_rollout_guide_"*environment_name*".jld2"
 s = load(rollout_guide_filename)
 rollout_guide = s["rollout_guide"];
@@ -421,9 +437,65 @@ get_num_outperformed(data.baseline, data.esp_random)
 get_num_outperformed(data.baseline, data.esp_sl)
 
 all_paths_hjb = extract_all_executed_paths(data.esp_hjb);
-p = visualize_all_executed_paths(input_config,all_paths_hjb, color);
+p = visualize_all_executed_paths(input_config,all_paths_hjb, :green);
 
 all_paths_baseline = extract_all_executed_paths(data.baseline);
-p = visualize_all_executed_paths(input_config, all_paths_baseline, color);
+p = visualize_all_executed_paths(input_config, all_paths_baseline, :olive);
 
+
+num_experiments = 100
+environment_name = "small_obstacles_25x25"
+
+data_10_humans_no_sb_no_shield = run_experiment(environment_name, num_experiments, 10, false, false )
+data_20_humans_no_sb_no_shield = run_experiment(environment_name, num_experiments, 20, false, false )
+data_30_humans_no_sb_no_shield = run_experiment(environment_name, num_experiments, 30, false, false )
+data_40_humans_no_sb_no_shield = run_experiment(environment_name, num_experiments, 40, false, false )
+
+data_10_humans_yes_sb_no_shield = run_experiment(environment_name, num_experiments, 10, true, false )
+data_20_humans_yes_sb_no_shield = run_experiment(environment_name, num_experiments, 20, true, false )
+data_30_humans_yes_sb_no_shield = run_experiment(environment_name, num_experiments, 30, true, false )
+data_40_humans_yes_sb_no_shield = run_experiment(environment_name, num_experiments, 40, true, false )
+
+data_10_humans_no_sb_yes_shield = run_experiment(environment_name, num_experiments, 10, false, true )
+data_20_humans_no_sb_yes_shield = run_experiment(environment_name, num_experiments, 20, false, true )
+data_30_humans_no_sb_yes_shield = run_experiment(environment_name, num_experiments, 30, false, true )
+data_40_humans_no_sb_yes_shield = run_experiment(environment_name, num_experiments, 40, false, true )
+
+num_experiments = 100
+outdoor_environment_names = ("no_obstacles_50x50", "small_obstacles_50x50", "L_shape_50x50")
+for env_name in outdoor_environment_names
+    for num_humans in (50,100,200)
+        for sudden_break in (false, true)
+            for run_shield in (false)
+                data = run_experiment(env_name, num_experiments, num_humans, sudden_break, run_shield )
+                datafile_name = env_name*"_humans_"*string(num_humans)*"_suddenbreak_"*string(sudden_break)*"_runshield_"*string(run_shield)*".jld2"
+                data_dict = Dict("data"=>data);
+                save(datafile_name, data_dict)
+            end
+        end
+    end
+end
+
+num_experiments = 100
+indoor_environment_names = ("no_obstacles_25x25", "small_obstacles_25x25", "L_shape_25x25")
+for env_name in indoor_environment_names
+    for num_humans in (10,20,30,40)
+        for sudden_break in (false, true)
+             for run_shield in (false)
+                data = run_experiment(env_name, num_experiments, num_humans, sudden_break, run_shield )
+                datafile_name = env_name*"_humans_"*string(num_humans)*"_suddenbreak_"*string(sudden_break)*"_runshield_"*string(run_shield)*".jld2"
+                data_dict = Dict("data"=>data);
+                save(datafile_name, data_dict)
+            end
+        end
+    end
+end
+
+
+Threads.@theads for entry in tuples
+    data = run_experiment(env_name, num_experiments, num_humans, sudden_break, run_shield )
+    datafile_name = env_name*"_humans_"*string(num_humans)*"_suddenbreak_"*string(sudden_break)*"_runshield_"*string(run_shield)*".jld2"
+    data_dict = Dict("data"=>data);
+    save(datafile_name, data_dict)
+end
 =#
