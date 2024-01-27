@@ -3,9 +3,12 @@ input_config =  InputParameters(
     50.0, #=env_length::Float64=#
     50.0, #=env_breadth::Float64=#
     ObstacleLocation[ObstacleLocation(9,14,2.5), ObstacleLocation(10,29,2.5),
-                    ObstacleLocation(15,40,2.5), ObstacleLocation(24,20,3.5),
+                    ObstacleLocation(7,40,3.5), ObstacleLocation(18,20,3.5),
                     ObstacleLocation(30,10,3), ObstacleLocation(36,35,3.5),
-                    ObstacleLocation(46,45,2.5), ObstacleLocation(44,22,3) ], #=obstacles::Array{obstacle_location,1}=#
+                    ObstacleLocation(20,10,2), ObstacleLocation(28,25,2.5),
+                    ObstacleLocation(35,18,2.5), ObstacleLocation(20,33,3.5),
+                    ObstacleLocation(46,45,2.5), ObstacleLocation(44,22,3),
+                    ObstacleLocation(23,46,2.5) ], #=obstacles::Array{obstacle_location,1}=#
     125, #=num_humans_env::Int64=#
     1.0, #=human_start_v::Float64=#
     15.0, #=veh_start_x::Float64=#
@@ -46,7 +49,7 @@ input_config =  InputParameters(
     0.1, #=simulator_time_step::Float64=#
     0.1, #=update_sensor_data_time_interval::Float64=#
     0.1, #=buffer_time::Float64=#
-    00.0 #=MAX_TIME_LIMIT::Float64=#
+    200.0 #=MAX_TIME_LIMIT::Float64=#
 )
 
 #=

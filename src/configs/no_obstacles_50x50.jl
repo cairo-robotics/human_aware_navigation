@@ -27,7 +27,7 @@ input_config =  InputParameters(
     1.0, #=radius_around_vehicle_goal::Float64=#
     0.5, #=max_risk_distance::Float64=#
     -100.0, #=human_collision_penalty::Float64=#
-    -100.0, #=obstacle_collision_penalty::Float64=#
+    -500.0, #=obstacle_collision_penalty::Float64=#
     1000.0, #=goal_reached_reward::Float64=#
     5, #=num_segments_in_one_time_step::Int64=#
     5.0, #=observation_discretization_length::Float64=#

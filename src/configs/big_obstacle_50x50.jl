@@ -3,7 +3,7 @@ input_config =  InputParameters(
     MersenneTwister(0xcfcc26e8), #=rng::AbstractRNG=#
     50.0, #=env_length::Float64=#
     50.0, #=env_breadth::Float64=#
-    ObstacleLocation[ObstacleLocation(15,24,9), ObstacleLocation(38,27,8)], #=obstacles::Array{obstacle_location,1}=#
+    ObstacleLocation[ObstacleLocation(25,25,17)], #=obstacles::Array{obstacle_location,1}=#
     125, #=num_humans_env::Int64=#
     1.0, #=human_start_v::Float64=#
     15.0, #=veh_start_x::Float64=#
@@ -28,7 +28,7 @@ input_config =  InputParameters(
     1.0, #=radius_around_vehicle_goal::Float64=#
     0.5, #=max_risk_distance::Float64=#
     -100.0, #=human_collision_penalty::Float64=#
-    -100.0, #=obstacle_collision_penalty::Float64=#
+    -500.0, #=obstacle_collision_penalty::Float64=#
     1000.0, #=goal_reached_reward::Float64=#
     5, #=num_segments_in_one_time_step::Int64=#
     1.0, #=observation_discretization_length::Float64=#
@@ -44,7 +44,7 @@ input_config =  InputParameters(
     0.1, #=simulator_time_step::Float64=#
     0.1, #=update_sensor_data_time_interval::Float64=#
     0.1, #=buffer_time::Float64=#
-    100.0 #=MAX_TIME_LIMIT::Float64=#
+    200.0 #=MAX_TIME_LIMIT::Float64=#
 )
 
 #=
