@@ -46,7 +46,7 @@ input_config =  InputParameters(
     0.1, #=simulator_time_step::Float64=#
     0.1, #=update_sensor_data_time_interval::Float64=#
     0.1, #=buffer_time::Float64=#
-    00.0 #=MAX_TIME_LIMIT::Float64=#
+    200.0 #=MAX_TIME_LIMIT::Float64=#
 )
 
 #=
