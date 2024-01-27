@@ -147,7 +147,7 @@ function get_plot(env, vehicle, vehicle_body, vehicle_params, nearby_humans, sen
 
     #Plot Obstacles
     obstacle_color = :black
-    for obs in env.obstacles
+    for (i,obs) in enumerate(env.obstacles)
         plot!(snapshot, circleShape(obs.x,obs.y,obs.r), color=obstacle_color, linewidth=2.0, linecolor = obstacle_color,
             legend=false, fillalpha=0.4, aspect_ratio=1, label="", seriestype = [:shape,])
         Plots.annotate!(snapshot,obs.x, obs.y, text("Obs", obstacle_color, :center, 10))

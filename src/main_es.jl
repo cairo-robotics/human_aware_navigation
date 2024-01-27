@@ -42,14 +42,17 @@ L_shape_30x30
 Initialization
 =#
 # environment_name = "no_obstacles_25x25"
-environment_name = "small_obstacles_25x25"
+# environment_name = "small_obstacles_25x25"
 # environment_name = "big_obstacle_25x25"
 # environment_name = "L_shape_25x25"
+
 # environment_name = "no_obstacles_50x50"
 # environment_name = "small_obstacles_50x50"
-# environment_name = "big_obstacle_50x50"
+# environment_name = "many_small_obstacles_50x50"
+environment_name = "big_obstacle_50x50"
 # environment_name = "L_shape_50x50"
 
+# environment_name = "small_obstacles_20x20"
 # environment_name = "indoor_tables_25x25"
 
 filename = "configs/"*environment_name*".jl"
@@ -154,8 +157,8 @@ c = run_experiment!(initial_sim_obj, pomdp_planner, lower_bound_func, upper_boun
 #=
 Create Gif
 =#
-# create_gif = true
-create_gif = false
+create_gif = true
+# create_gif = false
 if(create_gif)
     vehicle_executed_trajectory = []
     anim = @animate for k ∈ keys(output.sim_objects)
