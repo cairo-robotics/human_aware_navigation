@@ -483,7 +483,24 @@ for env_name in indoor_environment_names
         for sudden_break in (false, true)
              for run_shield in (false)
                 data = run_experiment(env_name, num_experiments, num_humans, sudden_break, run_shield )
-                datafile_name = env_name*"_humans_"*string(num_humans)*"_suddenbreak_"*string(sudden_break)*"_runshield_"*string(run_shield)*".jld2"
+                datafile_name = string(num_experiments)*env_name*"_humans_"*string(num_humans)*"_suddenbreak_"*string(sudden_break)*"_runshield_"*string(run_shield)*".jld2"
+                data_dict = Dict("data"=>data);
+                save(datafile_name, data_dict)
+            end
+        end
+    end
+end
+
+
+
+num_experiments = 25
+new_environment_names = ("many_small_obstacles_50x50", "big_obstacle_50x50")
+for env_name in new_environment_names
+    for num_humans in (50,100,200)
+        for sudden_break in (false, true)
+             for run_shield in (false)
+                data = run_experiment(env_name, num_experiments, num_humans, sudden_break, run_shield )
+                datafile_name = string(num_experiments)*env_name*"_humans_"*string(num_humans)*"_suddenbreak_"*string(sudden_break)*"_runshield_"*string(run_shield)*".jld2"
                 data_dict = Dict("data"=>data);
                 save(datafile_name, data_dict)
             end
@@ -498,4 +515,23 @@ Threads.@theads for entry in tuples
     data_dict = Dict("data"=>data);
     save(datafile_name, data_dict)
 end
+
+
+
+
+num_experiments = 25
+new_environment_names = ("no_obstacles_25x25", "small_obstacles_25x25", "L_shape_25x25","many_small_obstacles_50x50", "big_obstacle_50x50")
+for env_name in new_environment_names
+    for num_humans in (50,100,200)
+        for sudden_break in (false, true)
+             for run_shield in (false)
+                data = run_experiment(env_name, num_experiments, num_humans, sudden_break, run_shield )
+                datafile_name = string(num_experiments)*env_name*"_humans_"*string(num_humans)*"_suddenbreak_"*string(sudden_break)*"_runshield_"*string(run_shield)*".jld2"
+                data_dict = Dict("data"=>data);
+                save(datafile_name, data_dict)
+            end
+        end
+    end
+end
+
 =#
