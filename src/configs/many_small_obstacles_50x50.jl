@@ -1,5 +1,5 @@
 input_config =  InputParameters(
-    MersenneTwister(0xf60674f2), #=rng::AbstractRNG=#
+    MersenneTwister(0xf810d4e1), #=rng::AbstractRNG=#
     50.0, #=env_length::Float64=#
     50.0, #=env_breadth::Float64=#
     ObstacleLocation[ObstacleLocation(9,14,2.5), ObstacleLocation(10,29,2.5),
@@ -9,7 +9,7 @@ input_config =  InputParameters(
                     ObstacleLocation(35,18,2.5), ObstacleLocation(20,33,3.5),
                     ObstacleLocation(46,45,2.5), ObstacleLocation(44,22,3),
                     ObstacleLocation(23,46,2.5) ], #=obstacles::Array{obstacle_location,1}=#
-    125, #=num_humans_env::Int64=#
+    100, #=num_humans_env::Int64=#
     1.0, #=human_start_v::Float64=#
     15.0, #=veh_start_x::Float64=#
     3.0, #=veh_start_y::Float64=#
@@ -59,7 +59,7 @@ Weird scenarios
 never reached goal, causes local minima bellman problems - 0xc63596b3
 never reached goal - 0x5b336665, 0x7961389e
 
-collision - 0x595a3fa9, 0x7a24d142
+collision - 0xf810d4e1
 
 Didn't reach goal - 0xf60674f2
 =#
