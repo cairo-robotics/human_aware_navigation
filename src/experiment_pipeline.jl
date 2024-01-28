@@ -576,7 +576,7 @@ for env_name in all_environment_names
     for num_humans in (50,100,200)
         for (sudden_break,run_shield) in [ (false,true) ]
             data = run_experiment(env_name, num_experiments, num_humans, sudden_break, run_shield )
-            datafile_name = string(num_experiments)*"_"*env_name*"_humans_"*string(num_humans)*"_suddenbreak_"*string(sudden_break)*"_runshield_"*string(run_shield)*".jld2"
+            datafile_name = "./RESULTS/"*string(num_experiments)*"_"*env_name*"_humans_"*string(num_humans)*"_suddenbreak_"*string(sudden_break)*"_runshield_"*string(run_shield)*".jld2"
             data_dict = Dict("data"=>data);
             save(datafile_name, data_dict)
             data_dict = ""
