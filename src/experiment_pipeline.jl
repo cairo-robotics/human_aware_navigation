@@ -55,10 +55,10 @@ function PipelineOutput(env_name, num_experiments, num_humans, sudden_break, run
     else
         @assert length(seeds) == num_experiments
     end
-    baseline = Array{PipelineIndividualOutput,1}()
-    esp_random = Array{PipelineIndividualOutput,1}()
-    esp_sl = Array{PipelineIndividualOutput,1}()
-    esp_hjb = Array{PipelineIndividualOutput,1}()
+    baseline = Array{PipelineIndividualOutput,1}(undef,num_experiments)
+    esp_random = Array{PipelineIndividualOutput,1}(undef,num_experiments)
+    esp_sl = Array{PipelineIndividualOutput,1}(undef,num_experiments)
+    esp_hjb = Array{PipelineIndividualOutput,1}(undef,num_experiments)
 
     return PipelineOutput(
         env_name,
@@ -83,55 +83,67 @@ function run_pipeline!(output_obj)
     random_flag = true
     straight_line_flag = true
     HJB_flag = true
+    print_logs = false
 
     (;num_experiments, num_humans, sudden_break_flag, run_shield_flag, seeds,
     input_config,rollout_guide,baseline,esp_random,esp_sl,esp_hjb) = output_obj
     input_config.num_humans_env = num_humans
 
     try
-        for i in 1:num_experiments
+        Threads.@threads for i in 1:num_experiments
             seed = seeds[i]
 
             if(baseline_flag)
-                input_config.rng = MersenneTwister(seed)
+                IC = deepcopy(input_config) #To ensure the rng doesn't get modified between experiments when multi-threading
+                IC.rng = MersenneTwister(seed)
                 println("************ Running Experiment Number : ", i, " with LS Planner ************")
-                l = run_limited_space_planner_experiment(input_config,sudden_break_flag,run_shield_flag);
-                baseline_result = PipelineIndividualOutput(l);
+                l = run_limited_space_planner_experiment(IC,sudden_break_flag,run_shield_flag,print_logs);
                 # push!(baseline,l)
-                push!(baseline,baseline_result)
+                baseline_result = PipelineIndividualOutput(l);
+                # push!(baseline,baseline_result)
+                baseline[i] = baseline_result
             end
 
             GC.gc()
 
             if(random_flag)
-                input_config.rng = MersenneTwister(seed)
+                IC = deepcopy(input_config) #To ensure the rng doesn't get modified between experiments when multi-threading
+                IC.rng = MersenneTwister(seed)
                 println("************ Running Experiment Number : ", i, " with ES Planner - Random Rollouts ************")
-                e = run_extended_space_planner_experiment_random_rollout(input_config, rollout_guide,sudden_break_flag,run_shield_flag);
+                e = run_extended_space_planner_experiment_random_rollout(IC, rollout_guide,sudden_break_flag,
+                                                            run_shield_flag,print_logs);
                 # push!(esp_outputs,e)
                 esp_random_result = PipelineIndividualOutput(e)
-                push!(esp_random,esp_random_result)
+                # push!(esp_random,esp_random_result)
+                esp_random[i] = esp_random_result
             end
 
             GC.gc()
 
             if(straight_line_flag)
-                input_config.rng = MersenneTwister(seed)
+                IC = deepcopy(input_config) #To ensure the rng doesn't get modified between experiments when multi-threading
+                IC.rng = MersenneTwister(seed)
                 println("************ Running Experiment Number : ", i, " with ES Planner - Straight Line Rollouts ************")
-                e = run_extended_space_planner_experiment_straight_line_rollout(input_config,rollout_guide,sudden_break_flag,run_shield_flag);
+                e = run_extended_space_planner_experiment_straight_line_rollout(IC,rollout_guide,sudden_break_flag,
+                                                            run_shield_flag,print_logs);
                 # push!(esp_outputs,e)
                 esp_sl_result = PipelineIndividualOutput(e)
-                push!(esp_sl,esp_sl_result)
+                # push!(esp_sl,esp_sl_result)
+                esp_sl[i] = esp_sl_result
             end
 
             GC.gc()
 
             if(HJB_flag)
-                input_config.rng = MersenneTwister(seed)
+                IC = deepcopy(input_config)
+                IC.rng = MersenneTwister(seed)
                 println("************ Running Experiment Number : ", i, " with ES Planner - HJB Rollouts ************")
-                e = run_extended_space_planner_experiment_HJB_rollout(input_config,rollout_guide,sudden_break_flag,run_shield_flag)
+                e = run_extended_space_planner_experiment_HJB_rollout(IC,rollout_guide,sudden_break_flag,
+                                                            run_shield_flag,print_logs)
                 # push!(esp_outputs,e)
                 esp_hjb_result = PipelineIndividualOutput(e)
-                push!(esp_hjb,esp_hjb_result)
+                # push!(esp_hjb,esp_hjb_result)
+                esp_hjb[i] = esp_hjb_result
             end
 
             GC.gc()
@@ -415,6 +427,7 @@ run_pipeline!(data_sb_no_shield_yes)
 
 data = data_sb_no_shield_no;
 data = data_sb_yes_shield_no;
+data = s["data"];
 
 get_time_results(data.baseline)
 get_time_results(data.esp_hjb)
@@ -503,6 +516,8 @@ for env_name in new_environment_names
                 datafile_name = string(num_experiments)*env_name*"_humans_"*string(num_humans)*"_suddenbreak_"*string(sudden_break)*"_runshield_"*string(run_shield)*".jld2"
                 data_dict = Dict("data"=>data);
                 save(datafile_name, data_dict)
+                data = ""
+                GC.gc()
             end
         end
     end
@@ -520,7 +535,7 @@ end
 
 
 num_experiments = 25
-new_environment_names = ("no_obstacles_25x25", "small_obstacles_25x25", "L_shape_25x25","many_small_obstacles_50x50", "big_obstacle_50x50")
+new_environment_names = ("no_obstacles_50x50", "small_obstacles_50x50", "L_shape_50x50","many_small_obstacles_50x50", "big_obstacle_50x50")
 for env_name in new_environment_names
     for num_humans in (50,100,200)
         for sudden_break in (false, true)
@@ -529,7 +544,44 @@ for env_name in new_environment_names
                 datafile_name = string(num_experiments)*env_name*"_humans_"*string(num_humans)*"_suddenbreak_"*string(sudden_break)*"_runshield_"*string(run_shield)*".jld2"
                 data_dict = Dict("data"=>data);
                 save(datafile_name, data_dict)
+                data_dict = ""
+                data = ""
+                GC.gc()
             end
+        end
+    end
+end
+
+num_experiments = 10
+all_environment_names = ("no_obstacles_50x50", "small_obstacles_50x50", "L_shape_50x50","many_small_obstacles_50x50", "big_obstacle_50x50")
+for env_name in all_environment_names
+    for num_humans in (50,100,200)
+        # for (sudden_break,run_shield) in ( (false,false), (true,false), (false,true) )
+        for (sudden_break,run_shield) in ( (false,true) )
+            data = run_experiment(env_name, num_experiments, num_humans, sudden_break, run_shield )
+            datafile_name = string(num_experiments)*"_"*env_name*"_humans_"*string(num_humans)*"_suddenbreak_"*string(sudden_break)*"_runshield_"*string(run_shield)*".jld2"
+            data_dict = Dict("data"=>data);
+            save(datafile_name, data_dict)
+            data_dict = ""
+            data = ""
+            GC.gc()
+        end
+    end
+end
+
+
+num_experiments = 10
+all_environment_names = ("no_obstacles_50x50", "small_obstacles_50x50", "L_shape_50x50","many_small_obstacles_50x50", "big_obstacle_50x50")
+for env_name in all_environment_names
+    for num_humans in (50,100,200)
+        for (sudden_break,run_shield) in [ (false,true) ]
+            data = run_experiment(env_name, num_experiments, num_humans, sudden_break, run_shield )
+            datafile_name = string(num_experiments)*"_"*env_name*"_humans_"*string(num_humans)*"_suddenbreak_"*string(sudden_break)*"_runshield_"*string(run_shield)*".jld2"
+            data_dict = Dict("data"=>data);
+            save(datafile_name, data_dict)
+            data_dict = ""
+            data = ""
+            GC.gc()
         end
     end
 end
