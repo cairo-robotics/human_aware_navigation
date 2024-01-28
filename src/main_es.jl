@@ -14,6 +14,7 @@ include("visualization.jl")
 include("HJB_wrappers.jl")
 include("shielding/shield.jl")
 include("shielding/shield_wrappers.jl")
+include("shielding/lsp_shield_wrappers.jl")
 
 
 #=
@@ -27,6 +28,7 @@ indoor_tables_25x25
 
 no_obstacles_50x50
 small_obstacles_50x50
+many_small_obstacles_50x50
 big_obstacle_50x50
 L_shape_50x50
 
@@ -48,8 +50,8 @@ Initialization
 
 # environment_name = "no_obstacles_50x50"
 # environment_name = "small_obstacles_50x50"
-# environment_name = "many_small_obstacles_50x50"
-environment_name = "big_obstacle_50x50"
+environment_name = "many_small_obstacles_50x50"
+# environment_name = "big_obstacle_50x50"
 # environment_name = "L_shape_50x50"
 
 # environment_name = "small_obstacles_20x20"

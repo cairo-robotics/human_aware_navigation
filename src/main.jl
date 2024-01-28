@@ -16,10 +16,11 @@ include("visualization.jl")
 include("HJB_wrappers.jl")
 include("shielding/shield.jl")
 include("shielding/shield_wrappers.jl")
+include("shielding/lsp_shield_wrappers.jl")
 
 
 function run_extended_space_planner_experiment_HJB_rollout(input_config, rollout_guide,
-                                        sudden_break_flag, run_shield_flag, create_gif=false)
+                                        sudden_break_flag, run_shield_flag, print_logs=true, create_gif=false)
 
     #Define experiment details and POMDP planning details
     pomdp_details = POMPDPlanningDetails(input_config)
@@ -65,7 +66,7 @@ function run_extended_space_planner_experiment_HJB_rollout(input_config, rollout
     #Run the experiment
     try
         run_experiment!(initial_sim_obj, pomdp_planner, lower_bound_func, upper_bound_func,
-                        pomdp_details, exp_details, output, run_shield_flag)
+                        pomdp_details, exp_details, output, run_shield_flag, print_logs)
         #Create Gif
         if(create_gif)
             generate_gif(output, exp_details)
@@ -79,7 +80,7 @@ end
 
 
 function run_limited_space_planner_experiment(input_config,
-                    sudden_break_flag, run_shield_flag, create_gif=false)
+                    sudden_break_flag, run_shield_flag, print_logs=true, create_gif=false)
 
     #Define experiment details and POMDP planning details
     pomdp_details = POMPDPlanningDetails(input_config)
@@ -104,7 +105,10 @@ function run_limited_space_planner_experiment(input_config,
     #Find hybrid A* path for the given environment and vehicle.
     nbh = NearbyHumans(HumanState[], Int64[], HumanGoalsBelief[])
     vehicle_delta_angle_actions = get_vehicle_actions(45,5)
+    given_planning_time = path_planning_details.planning_time
+    path_planning_details.planning_time = 10.0
     vehicle_controls_sequence = hybrid_astar_search(env,veh,temp_veh_params,vehicle_delta_angle_actions,nbh,path_planning_details);
+    path_planning_details.planning_time = given_planning_time
     veh_params = VehicleParametersLSPlanner(input_config.veh_wheelbase,input_config.veh_length,
                     input_config.veh_breadth,input_config.veh_dist_origin_to_center, r,
                     input_config.veh_max_speed,input_config.veh_max_steering_angle,veh_goal,vehicle_controls_sequence)
@@ -120,7 +124,7 @@ function run_limited_space_planner_experiment(input_config,
     #Run the experiment
     try
         run_experiment!(initial_sim_obj, path_planning_details, pomdp_details, exp_details, output,
-                            sudden_break_flag, run_shield_flag)
+                            sudden_break_flag, run_shield_flag, print_logs)
         #Create Gif
         if(create_gif)
             generate_gif(output, exp_details)
@@ -133,7 +137,7 @@ function run_limited_space_planner_experiment(input_config,
 end
 
 function run_extended_space_planner_experiment_random_rollout(input_config, rollout_guide,
-                                    sudden_break_flag, run_shield_flag, create_gif=false)
+                                    sudden_break_flag, run_shield_flag, print_logs=true, create_gif=false)
 
     #Define experiment details and POMDP planning details
     pomdp_details = POMPDPlanningDetails(input_config)
@@ -178,7 +182,7 @@ function run_extended_space_planner_experiment_random_rollout(input_config, roll
     #Run the experiment
     try
         run_experiment!(initial_sim_obj, pomdp_planner, lower_bound_func, upper_bound_func,
-                        pomdp_details, exp_details, output, run_shield_flag)
+                        pomdp_details, exp_details, output, run_shield_flag, print_logs)
         #Create Gif
         if(create_gif)
             generate_gif(output, exp_details)
@@ -191,7 +195,7 @@ function run_extended_space_planner_experiment_random_rollout(input_config, roll
 end
 
 function run_extended_space_planner_experiment_straight_line_rollout(input_config, rollout_guide,
-                                            sudden_break_flag, run_shield_flag, create_gif=false)
+                                            sudden_break_flag, run_shield_flag, print_logs=true, create_gif=false)
 
     #Define experiment details and POMDP planning details
     pomdp_details = POMPDPlanningDetails(input_config)
@@ -238,7 +242,7 @@ function run_extended_space_planner_experiment_straight_line_rollout(input_confi
     #Run the experiment
     try
         run_experiment!(initial_sim_obj, pomdp_planner, lower_bound_func, upper_bound_func,
-                        pomdp_details, exp_details, output, run_shield_flag)
+                        pomdp_details, exp_details, output, run_shield_flag, print_logs)
         #Create Gifs
         if(create_gif)
             generate_gif(output, exp_details)

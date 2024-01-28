@@ -11,6 +11,10 @@ include("simulator.jl")
 include("simulator_utils.jl")
 include("parser.jl")
 include("visualization.jl")
+include("shielding/shield.jl")
+include("shielding/shield_wrappers.jl")
+include("shielding/lsp_shield_wrappers.jl")
+
 
 #=
 Possible Environment Names
@@ -23,6 +27,7 @@ indoor_tables_25x25
 
 no_obstacles_50x50
 small_obstacles_50x50
+many_small_obstacles_50x50
 big_obstacle_50x50
 L_shape_50x50
 
@@ -42,16 +47,15 @@ Initialization
 # environment_name = "big_obstacle_25x25"
 # environment_name = "L_shape_25x25"
 # environment_name = "no_obstacles_50x50"
-# environment_name = "small_obstacles_50x50"
+environment_name = "small_obstacles_50x50"
 # environment_name = "big_obstacle_50x50"
 # environment_name = "L_shape_50x50"
 
 # environment_name = "indoor_tables_25x25"
-environment_name = "small_obstacles_25x25"
+# environment_name = "small_obstacles_25x25"
 
 filename = "configs/"*environment_name*".jl"
 include(filename)
-input_config = small_obstacles_25x25
 
 #=
 Define experiment details and POMDP planning details
@@ -93,7 +97,10 @@ Find hybrid A* path for the given environment and vehicle.
 =#
 nbh = NearbyHumans(HumanState[], Int64[], HumanGoalsBelief[])
 vehicle_delta_angle_actions = get_vehicle_actions(45,5)
+given_planning_time = path_planning_details.planning_time
+path_planning_details.planning_time = 10.0
 vehicle_controls_sequence = hybrid_astar_search(env,veh,temp_veh_params,vehicle_delta_angle_actions,nbh,path_planning_details);
+path_planning_details.planning_time = given_planning_time
 veh_params = VehicleParametersLSPlanner(input_config.veh_wheelbase,input_config.veh_length,
                 input_config.veh_breadth,input_config.veh_dist_origin_to_center, r,
                 input_config.veh_max_speed,input_config.veh_max_steering_angle,veh_goal,vehicle_controls_sequence)
@@ -116,7 +123,7 @@ initial_sim_obj = NavigationSimulator(env,veh,veh_params,veh_sensor_data,env_hum
 Run the experiment
 =#
 SB_flag = false  #Apply Sudden Break Flag
-RS_flag = false  #Run shield Flag
+RS_flag = true  #Run shield Flag
 run_experiment!(initial_sim_obj, path_planning_details, pomdp_details, exp_details, output, SB_flag, RS_flag)
 
 
