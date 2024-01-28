@@ -1,7 +1,9 @@
 # shield_wrappers.jl
 
 # main function for POMDP to call to return best safe action
-function get_best_shielded_action(veh, nearby_humans, Dt_obs_to_k1, Dt_plan, get_actions::Function, veh_body, human_goal_positions, pomdp, despot, user_defined_rng)
+function get_best_shielded_action(veh, nearby_humans, Dt_obs_to_k1, Dt_plan, get_actions::Function,
+                            veh_body, human_goal_positions, pomdp, despot, user_defined_rng)
+
     # reformat vehicle state
     x_k1 = SVector(veh.x, veh.y, wrap_between_negative_pi_to_pi(veh.theta), veh.v)
 
@@ -14,12 +16,13 @@ function get_best_shielded_action(veh, nearby_humans, Dt_obs_to_k1, Dt_plan, get
     # run shielding algorithm to produce shielded action set
     v_human_max = 1.25
     safe_HJB_value_lim = 200.0
-    shield_actions, shield_action_indices = shield_action_set(x_k1, nbh_pos, Dt_obs_to_k1, Dt_plan, get_actions, veh_body, human_goal_positions, v_human_max, safe_HJB_value_lim, pomdp)
+    shield_actions, shield_action_indices = shield_action_set(x_k1, nbh_pos, Dt_obs_to_k1, Dt_plan, get_actions,
+                                            veh_body, human_goal_positions, v_human_max, safe_HJB_value_lim, pomdp)
     println("len(ia_safe_set) = ", length(shield_action_indices))
 
     # TEST ONLY ---
     if length(shield_action_indices) == 0
-        println("ISSUE: no safe actions returned")
+        println("ISSUE: no safe actions returned. THIS SHOULD NOT HAVE HAPPENED. BAAAADDDDD!")
         println("x_k1 = ", x_k1)
     end
     # ---
@@ -47,6 +50,7 @@ function get_best_shielded_action(veh, nearby_humans, Dt_obs_to_k1, Dt_plan, get
     end
 
     # draw random if multiple actions have same value
+    user_defined_rng = MersenneTwister(77)
     best_action = rand(user_defined_rng, best_action)
 
     println("best safe action = ", best_action)

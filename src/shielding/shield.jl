@@ -247,7 +247,122 @@ function propagate_human(human_pos, goal_index, Dt, v_human, goal_positions)
     return x_ih_k1
 end
 
-#=
-Q: Why did you comment out minkowski_sum computation at the starting time step?
-Q: Why did you say this? # NOTE: can remove all safe_HJB_value_lim
-=#
+
+function lsp_shield_action_set(x_k1, nearby_human_positions, Dt_obs_to_k1, Dt_plan, get_actions::Function,
+                        veh, human_goal_positions, v_human_max, m)
+
+    Dv_max = m.vehicle_action_delta_speed
+
+    #Compute Maximum possible vehicle velocity
+    action_set, index_action_set = get_actions(x_k1, Dt_plan, veh, m)
+    v_k2_max = x_k1[4] + maximum(action_set)
+    kd_max = ceil(Int, (0.0 - v_k2_max)/(-Dv_max)) - 1
+
+    # generate each human FRS sequence from t_k2 to t_stop_max
+    F_all_body_seq = generate_F_all_seq(nearby_human_positions, Dt_obs_to_k1, Dt_plan, v_human_max, human_goal_positions, kd_max)
+
+    # perform reachability check on all actions in standard POMDP action set
+    # safe_action_set = []
+    index_safe_action_set = Int64[]
+    path = m.rollout_guide.controls_sequence
+
+    for id in index_action_set
+
+        controls_sequence = deepcopy(path)
+        action = action_set[id]
+        action_safe = true
+
+        # propagate vehicle state to state x_k2
+
+        x_k2, num_segments = lsp_propagate_state(x_k1, action, Dt_plan, controls_sequence, m)
+        controls_sequence = controls_sequence[num_segments+1:end]
+
+        #Now need to check if x_k2 is a safe state or not
+
+        #num time steps for the vehicle to come to a stop on that path
+        num_steps_to_stop = ceil(Int, (0.0 - x_k2[4])/(-Dv_max)) - 1
+        curr_vehicle_state = x_k2
+
+        for step in 0:num_steps_to_stop
+
+            # println("\nshield: ia_k1 = $ia_k1, a_k1 = $a_k1, x_k2 = $x_k2, kd_stop = $kd_stop")
+
+            # check for collisions with each human
+            veh_body_cir_kd = state_to_body_circle(curr_vehicle_state, veh)
+
+            humans_safe = true
+            for ih in axes(nearby_human_positions, 1)
+                F_ih_body_kd = F_all_body_seq[ih][3+step]
+                if isdisjoint(veh_body_cir_kd, F_ih_body_kd) == false
+                    humans_safe = false
+                    break
+                end
+            end
+
+            if humans_safe == false
+                action_safe = false
+                break
+            end
+
+            # propagate vehicle for next time step along the A* path by decreasing its speed
+            a_d = -Dv_max
+            new_vehicle_state, num_segments = lsp_propagate_state(curr_vehicle_state, a_d, Dt_plan, controls_sequence, m)
+
+            # pass state to next step
+            curr_vehicle_state = new_vehicle_state
+            controls_sequence = controls_sequence[num_segments+1:end]
+        end
+
+        # action is safe
+        if action_safe == true
+            push!(index_safe_action_set, id)
+        end
+    end
+
+    return action_set,index_safe_action_set
+    # return actions_k1[ia_k1_safe_set], ia_k1_safe_set
+end
+
+
+function lsp_propagate_state(vehicle_state, action, time_duration, controls_sequence, m)
+
+    xpos = vehicle_state[1]
+    ypos = vehicle_state[2]
+    theta = vehicle_state[3]
+    speed = vehicle_state[4]
+
+    delta_speed = action
+    max_vehicle_speed = m.max_vehicle_speed
+
+    new_vehicle_speed = clamp(speed+delta_speed, 0.0, max_vehicle_speed)
+    num_segments_in_one_time_step = Int(new_vehicle_speed/m.vehicle_action_delta_speed)
+
+    time_duration_per_segment = time_duration/num_segments_in_one_time_step
+
+    num_segments = min(num_segments_in_one_time_step, length(controls_sequence))
+    current_x, current_y, current_theta = xpos, ypos, theta
+
+    for i in 1:num_segments
+        # println(s.index_vehicle_controls_sequence , " ", s.index_vehicle_controls_sequence+i-1, " ", m.rollout_guide.len)
+        # println(s)
+        # println("SA is : ", steering_angle)
+        # if(steering_angle == 0.0)
+        #     new_theta = current_theta
+        #     new_x = current_x + new_vehicle_speed*cos(current_theta)*(m.one_time_step/num_segments_in_one_time_step)
+        #     new_y = current_y + new_vehicle_speed*sin(current_theta)*(m.one_time_step/num_segments_in_one_time_step)
+        # else
+        #     new_theta = current_theta + (new_vehicle_speed * tan(steering_angle) * (m.one_time_step/num_segments_in_one_time_step) / m.vehicle_wheelbase)
+        #     new_theta = wrap_between_0_and_2Pi(new_theta)
+        #     new_x = current_x + ((m.vehicle_wheelbase / tan(steering_angle)) * (sin(new_theta) - sin(current_theta)))
+        #     new_y = current_y + ((m.vehicle_wheelbase / tan(steering_angle)) * (cos(current_theta) - cos(new_theta)))
+        # end
+        steering_angle = controls_sequence[i]
+        # println(s.index_vehicle_controls_sequence+i-1, " SA: ", steering_angle)
+        new_x,new_y,new_theta = move_vehicle(current_x,current_y,current_theta,m.vehicle_wheelbase,
+                                        steering_angle,new_vehicle_speed,time_duration_per_segment)
+        # push!(vehicle_path,(new_x,new_y,new_theta))
+        current_x,current_y,current_theta = new_x,new_y,new_theta
+    end
+
+    return SVector(current_x,current_y,current_theta,new_vehicle_speed),num_segments
+end
