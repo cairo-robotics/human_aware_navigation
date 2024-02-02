@@ -1,9 +1,11 @@
 # shield_wrappers.jl
 
 # main function for POMDP to call to return best safe action
-function lsp_get_best_shielded_action(veh, nearby_humans, Dt_obs_to_k1, Dt_plan, get_actions::Function,
-                veh_body, human_goal_positions, pomdp, despot, user_defined_rng)
+function lsp_get_best_shielded_action(veh, nearby_humans, Dt_obs_to_k1, Dt_plan,
+        get_actions::Function, veh_body, human_goal_positions, pomdp, despot,
+        user_defined_rng)
 
+    print_logs = false
     # reformat vehicle state
     x_k1 = SVector(veh.x, veh.y, wrap_between_negative_pi_to_pi(veh.theta), veh.v)
 
@@ -15,9 +17,12 @@ function lsp_get_best_shielded_action(veh, nearby_humans, Dt_obs_to_k1, Dt_plan,
 
     # run shielding algorithm to produce shielded action set
     v_human_max = 1.25
-    shield_actions, shield_action_indices = lsp_shield_action_set(x_k1, nbh_pos, Dt_obs_to_k1, Dt_plan, get_actions,
-                                            veh_body, human_goal_positions, v_human_max, pomdp)
-    println("len(ia_safe_set) = ", length(shield_action_indices))
+    shield_actions, shield_action_indices = lsp_shield_action_set(x_k1, nbh_pos, Dt_obs_to_k1,
+                    Dt_plan, get_actions, veh_body, human_goal_positions, v_human_max, pomdp)
+                    
+    if(print_logs)
+        println("len(ia_safe_set) = ", length(shield_action_indices))
+    end
 
     # TEST ONLY ---
     if length(shield_action_indices) == 0
@@ -44,7 +49,9 @@ function lsp_get_best_shielded_action(veh, nearby_humans, Dt_obs_to_k1, Dt_plan,
     # draw random if multiple actions have same value
     user_defined_rng = MersenneTwister(77)
     best_a = rand(user_defined_rng, best_action)
-    println("best safe action = ", best_a)
+    if(print_logs)
+        println("best safe action = ", best_a)
+    end
 
     return true,ActionLimitedSpacePOMDP(best_a)
 end
