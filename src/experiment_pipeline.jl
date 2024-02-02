@@ -90,7 +90,8 @@ function run_pipeline!(output_obj)
     input_config.num_humans_env = num_humans
 
     try
-        Threads.@threads for i in 1:num_experiments
+        # Threads.@threads for i in 1:num_experiments
+        for i in 1:num_experiments
             seed = seeds[i]
 
             if(baseline_flag)
@@ -104,7 +105,6 @@ function run_pipeline!(output_obj)
                 baseline[i] = baseline_result
             end
 
-            GC.gc()
 
             if(random_flag)
                 IC = deepcopy(input_config) #To ensure the rng doesn't get modified between experiments when multi-threading
@@ -118,7 +118,6 @@ function run_pipeline!(output_obj)
                 esp_random[i] = esp_random_result
             end
 
-            GC.gc()
 
             if(straight_line_flag)
                 IC = deepcopy(input_config) #To ensure the rng doesn't get modified between experiments when multi-threading
@@ -132,7 +131,6 @@ function run_pipeline!(output_obj)
                 esp_sl[i] = esp_sl_result
             end
 
-            GC.gc()
 
             if(HJB_flag)
                 IC = deepcopy(input_config)
@@ -295,27 +293,30 @@ function extract_all_executed_paths(results)
     num_experiments = length(results)
 
     for i in 1:num_experiments
-        px,py = extract_one_executed_path(results[i])
-        push!( all_executed_paths, i=> (px,py) )
+        if(results[i].vehicle_reached_goal)
+            px,py = extract_one_executed_path(results[i])
+            push!( all_executed_paths, i=> (px,py) )
+        end
     end
 
     return all_executed_paths
 end
+
 
 function visualize_env(env, vehicle_goal, exp_details)
 
     l = env.length
     b = env.breadth
     snapshot = plot(aspect_ratio=:equal,size=(1000,1000), dpi=300,
-        # axis=([], false)
-        xticks=0:2:l, yticks=0:2:b,
+        axis=([], false),
+        # xticks=0:2:l, yticks=0:2:b,
         # xlabel="x-axis [m]", ylabel="y-axis [m]",
         # legend=:bottom,
         # legend=false
         )
 
     #Plot Workspace
-    turf_color = :green
+    turf_color = :white
     plot!(snapshot, rectangleShape(0.0,0.0,env.length,env.breadth),opacity=0.1,color=turf_color,linewidth=2.0,linecolor=:black,label="")
 
 
@@ -331,46 +332,32 @@ function visualize_env(env, vehicle_goal, exp_details)
     for obs in env.obstacles
         plot!(snapshot, circleShape(obs.x,obs.y,obs.r), color=obstacle_color, linewidth=2.0, linecolor = obstacle_color,
             legend=false, fillalpha=0.4, aspect_ratio=1, label="", seriestype = [:shape,])
-        Plots.annotate!(snapshot,obs.x, obs.y, text("Obs", obstacle_color, :center, 10))
+        # Plots.annotate!(snapshot,obs.x, obs.y, text("Obs", obstacle_color, :center, 10))
     end
-
-
-    #Plot Human Goals
-    human_goals = get_human_goals(env)
-    offset = 0.125 * 0
-    human_goal_color = :green
-    for i in 1:length(human_goals)
-        goal_name = "G"*string(i)
-        human_goals[i].x > 1/2*env.length ? x_dir = 1 : x_dir = -1
-        human_goals[i].y > 1/2*env.breadth ? y_dir = 1 : y_dir = -1
-        Plots.annotate!(human_goals[i].x + x_dir*offset, human_goals[i].y + y_dir*offset, text(goal_name, :black, :center, 10))
-        plot!(snapshot, circleShape(human_goals[i].x + x_dir*offset,human_goals[i].y + y_dir*offset,exp_details.max_risk_distance),
-                    color=human_goal_color, linewidth=2.0, linecolor = :black, fillalpha=0.2, aspect_ratio=1, label="", seriestype = [:shape,])
-    end
-
 
     #Plot Vehicle Goal
     vehicle_goal_color = :yellow
-    Plots.annotate!(snapshot,vehicle_goal.x, vehicle_goal.y, text("G", :darkgreen, :center, 10))
-    plot!(snapshot, circleShape(vehicle_goal.x, vehicle_goal.y, exp_details.radius_around_vehicle_goal),
-        color=vehicle_goal_color, fillalpha=0.2, linecolor=:black, linewidth=2.0, label="", seriestype = [:shape,])
-
+    Plots.annotate!(snapshot,vehicle_goal.x, vehicle_goal.y, text("GOAL", :brown, :center, 30))
 
     return snapshot
 end
 
-function visualize_all_executed_paths( input_config, all_executed_paths, c)
+
+function visualize_all_executed_paths( input_config, all_executed_paths, col)
     exp_details = ExperimentDetails(input_config)
     env = generate_environment(input_config.env_length,input_config.env_breadth,input_config.obstacles)
     veh_goal = Location(input_config.veh_goal_x,input_config.veh_goal_y)
     snapshot = visualize_env(env, veh_goal, exp_details)
+    Plots.annotate!(snapshot,input_config.veh_start_x, input_config.veh_start_y,
+                                    text("START", :brown, :center, 30))
     for (i,path) in all_executed_paths
         px,py = path[1],path[2]
-        plot!(snapshot, px, py, linewidth=2,label="",color=c)
+        plot!(snapshot, px, py, linewidth=2,label="",color=col)
     end
     display(snapshot)
     return snapshot
 end
+
 
 function run_experiment(environment_name, num_experiments, num_humans, sudden_break, run_shield )
     filename = "src/configs/"*environment_name*".jl"
@@ -427,6 +414,7 @@ run_pipeline!(data_sb_no_shield_yes)
 
 data = data_sb_no_shield_no;
 data = data_sb_yes_shield_no;
+
 data = s["data"];
 
 get_time_results(data.baseline)
@@ -434,26 +422,34 @@ get_time_results(data.esp_hjb)
 get_time_results(data.esp_random)
 get_time_results(data.esp_sl)
 
-get_sudden_break_results(data.baseline)
-get_sudden_break_results(data.esp_hjb)
-get_sudden_break_results(data.esp_random)
-get_sudden_break_results(data.esp_sl)
+get_num_outperformed(data.baseline, data.esp_hjb)
+get_num_outperformed(data.baseline, data.esp_random)
+get_num_outperformed(data.baseline, data.esp_sl)
 
 get_num_collisions(data.baseline,1.0)
 get_num_collisions(data.esp_hjb,1.0)
 get_num_collisions(data.esp_random,1.0)
 get_num_collisions(data.esp_sl,1.0)
 
+get_sudden_break_results(data.baseline)
+get_sudden_break_results(data.esp_hjb)
+get_sudden_break_results(data.esp_random)
+get_sudden_break_results(data.esp_sl)
 
-get_num_outperformed(data.baseline, data.esp_hjb)
-get_num_outperformed(data.baseline, data.esp_random)
-get_num_outperformed(data.baseline, data.esp_sl)
+
+
+config_fn = "./src/configs/"*env_name*".jl"
+include(config_fn)
 
 all_paths_hjb = extract_all_executed_paths(data.esp_hjb);
-p = visualize_all_executed_paths(input_config,all_paths_hjb, :green);
+p = visualize_all_executed_paths(input_config,all_paths_hjb, :olive);
+esp_fn = "esp_"*env_name*"_paths.svg"
+Plots.savefig(p,esp_fn)
 
 all_paths_baseline = extract_all_executed_paths(data.baseline);
-p = visualize_all_executed_paths(input_config, all_paths_baseline, :olive);
+p = visualize_all_executed_paths(input_config, all_paths_baseline, :steelblue);
+lsp_fn = "lsp_"*env_name*"_paths.svg"
+Plots.savefig(p,lsp_fn)
 
 
 num_experiments = 100
@@ -552,14 +548,16 @@ for env_name in new_environment_names
     end
 end
 
-num_experiments = 10
 all_environment_names = ("no_obstacles_50x50", "small_obstacles_50x50", "L_shape_50x50","many_small_obstacles_50x50", "big_obstacle_50x50")
+
+
+num_experiments = 10
+all_environment_names = ("many_small_obstacles_50x50", "big_obstacle_50x50")
 for env_name in all_environment_names
     for num_humans in (50,100,200)
-        # for (sudden_break,run_shield) in ( (false,false), (true,false), (false,true) )
-        for (sudden_break,run_shield) in ( (false,true) )
+        for (sudden_break,run_shield) in ( (false,false), (true,false), (false,true) )
             data = run_experiment(env_name, num_experiments, num_humans, sudden_break, run_shield )
-            datafile_name = string(num_experiments)*"_"*env_name*"_humans_"*string(num_humans)*"_suddenbreak_"*string(sudden_break)*"_runshield_"*string(run_shield)*".jld2"
+            datafile_name = "./RESULTS/"*string(num_experiments)*"_"*env_name*"_humans_"*string(num_humans)*"_suddenbreak_"*string(sudden_break)*"_runshield_"*string(run_shield)*".jld2"
             data_dict = Dict("data"=>data);
             save(datafile_name, data_dict)
             data_dict = ""
@@ -571,7 +569,7 @@ end
 
 
 num_experiments = 10
-all_environment_names = ("no_obstacles_50x50", "small_obstacles_50x50", "L_shape_50x50","many_small_obstacles_50x50", "big_obstacle_50x50")
+all_environment_names = ("many_small_obstacles_50x50", "big_obstacle_50x50")
 for env_name in all_environment_names
     for num_humans in (50,100,200)
         for (sudden_break,run_shield) in [ (false,true) ]
@@ -584,6 +582,34 @@ for env_name in all_environment_names
             GC.gc()
         end
     end
+end
+
+
+
+
+num_experiments = 100
+env_name = "many_small_obstacles_50x50"
+num_humans = 200
+
+
+for (sudden_break,run_shield) in [ (false,false) ]
+    data = run_experiment(env_name, num_experiments, num_humans, sudden_break, run_shield )
+    datafile_name = "./RESULTS/"*string(num_experiments)*"_"*env_name*"_humans_"*string(num_humans)*"_suddenbreak_"*string(sudden_break)*"_runshield_"*string(run_shield)*".jld2"
+    data_dict = Dict("data"=>data);
+    save(datafile_name, data_dict)
+    data_dict = ""
+    data = ""
+end
+
+GC.gc();
+
+for (sudden_break,run_shield) in [ (true,false) ]
+    data = run_experiment(env_name, num_experiments, num_humans, sudden_break, run_shield )
+    datafile_name = "./RESULTS/"*string(num_experiments)*"_"*env_name*"_humans_"*string(num_humans)*"_suddenbreak_"*string(sudden_break)*"_runshield_"*string(run_shield)*".jld2"
+    data_dict = Dict("data"=>data);
+    save(datafile_name, data_dict)
+    data_dict = ""
+    data = ""
 end
 
 =#
