@@ -56,6 +56,7 @@ environment_name = "many_small_obstacles_50x50"
 
 # environment_name = "small_obstacles_20x20"
 # environment_name = "indoor_tables_25x25"
+# environment_name = "aspen"
 
 filename = "configs/"*environment_name*".jl"
 include(filename)
@@ -119,7 +120,9 @@ solve_HJB = true
 solve_HJB = false
 if(solve_HJB)
     println("Solving HJB equation for given environment ....")
+    start_time = time()
     rollout_guide = HJBPolicy(HJB_planning_details, exp_details, veh_params);
+    println("Finish time : ", time()-start_time)
     d = Dict("rollout_guide"=>rollout_guide);
     save(rollout_guide_filename,d);
 else

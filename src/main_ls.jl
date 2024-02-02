@@ -47,7 +47,8 @@ Initialization
 # environment_name = "big_obstacle_25x25"
 # environment_name = "L_shape_25x25"
 # environment_name = "no_obstacles_50x50"
-environment_name = "small_obstacles_50x50"
+# environment_name = "small_obstacles_50x50"
+environment_name = "many_small_obstacles_50x50"
 # environment_name = "big_obstacle_50x50"
 # environment_name = "L_shape_50x50"
 
@@ -122,8 +123,8 @@ initial_sim_obj = NavigationSimulator(env,veh,veh_params,veh_sensor_data,env_hum
 #=
 Run the experiment
 =#
-SB_flag = false  #Apply Sudden Break Flag
-RS_flag = true  #Run shield Flag
+SB_flag = true  #Apply Sudden Break Flag
+RS_flag = false  #Run shield Flag
 run_experiment!(initial_sim_obj, path_planning_details, pomdp_details, exp_details, output, SB_flag, RS_flag)
 
 
