@@ -652,8 +652,8 @@ function upper_bound_rollout_gen(m::ExtendedSpacePOMDP, x, a)
     vehicle_center_y = x[2] + m.vehicle_D*sin(x[3])
     for obstacle in m.world.obstacles
         if( is_within_range(vehicle_center_x,vehicle_center_y,obstacle.x,obstacle.y,obstacle.r+m.min_safe_distance_from_obstacle+m.vehicle_R) )
-            println("Collision with this obstacle " ,obstacle)
-            println(x)
+            # println("Collision with this obstacle " ,obstacle)
+            # println(x)
             println(vehicle_center_x, " ", vehicle_center_y)
             new_vehicle_position = (-100.0, -100.0, -100.0)
             collision_with_obstacle = true
