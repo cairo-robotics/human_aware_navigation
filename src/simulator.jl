@@ -281,7 +281,7 @@ function run_experiment!(current_sim_obj::NavigationSimulator{VehicleParametersE
     info = nothing
     predicted_vehicle_pos_in_goal = false
     debug = false
-    store_tree=false
+    store_tree=true
     print_despot_time = true
     print_shielding_time = true
     despot_start_time = 0.0
@@ -497,7 +497,7 @@ function run_experiment!(current_sim_obj::NavigationSimulator{VehicleParametersL
     print_despot_time = true
     print_shielding_time = true
     despot_start_time = 0.0
-    store_tree=false
+    store_tree=true
     start_time = time()
 
     #=
