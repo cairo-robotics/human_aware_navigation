@@ -25,7 +25,7 @@ input_config =  InputParameters(
     1.0, #=min_safe_distance_from_human::Float64=#
     0.0, #=min_safe_distance_from_obstacle::Float64=#
     1.0, #=radius_around_vehicle_goal::Float64=#
-    0.5, #=max_risk_distance::Float64=#
+    1.0, #=max_risk_distance::Float64=#
     -100.0, #=human_collision_penalty::Float64=#
     -500.0, #=obstacle_collision_penalty::Float64=#
     1000.0, #=goal_reached_reward::Float64=#
