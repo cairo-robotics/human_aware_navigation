@@ -366,3 +366,20 @@ function lsp_propagate_state(vehicle_state, action, time_duration, controls_sequ
 
     return SVector(current_x,current_y,current_theta,new_vehicle_speed),num_segments
 end
+
+
+function calculate_D_shield(curr_vehicle_speed, )
+
+    curr_vehicle_speed = 0.5
+    t_before_action_executed =
+    delta_speed = 
+    max_human_speed =
+    t_stop = abs(curr_speed/delta_speed)
+    @assert isinteger(t_stop) "$curr_speed divided by $delta_speed is not an integer, so t_stop is not an Integer"
+
+    max_dist_before_planning_starts = curr_speed*t_before_action_executed
+    max_vehicle_dist = sum(curr_speed:delta_speed:0.0)
+    max_human_dist = max_human_speed*t_stop
+    D_shield = max_vehicle_dist + max_human_dist + max_dist_before_planning_starts
+    return D_shield
+end
