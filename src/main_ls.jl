@@ -11,9 +11,9 @@ include("simulator.jl")
 include("simulator_utils.jl")
 include("parser.jl")
 include("visualization.jl")
-include("shielding/shield.jl")
-include("shielding/shield_wrappers.jl")
-include("shielding/lsp_shield_wrappers.jl")
+include("shielding/shield_utils.jl")
+include("shielding/esp_shield.jl")
+include("shielding/lsp_shield.jl")
 
 
 #=

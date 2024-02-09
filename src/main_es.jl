@@ -12,10 +12,9 @@ include("simulator_utils.jl")
 include("parser.jl")
 include("visualization.jl")
 include("HJB_wrappers.jl")
-include("shielding/shield.jl")
-include("shielding/shield_wrappers.jl")
-include("shielding/lsp_shield_wrappers.jl")
-
+include("shielding/shield_utils.jl")
+include("shielding/esp_shield.jl")
+include("shielding/lsp_shield.jl")
 
 #=
 Possible Environment Names
@@ -49,8 +48,8 @@ Initialization
 # environment_name = "L_shape_25x25"
 
 # environment_name = "no_obstacles_50x50"
-# environment_name = "small_obstacles_50x50"
-environment_name = "many_small_obstacles_50x50"
+environment_name = "small_obstacles_50x50"
+# environment_name = "many_small_obstacles_50x50"
 # environment_name = "big_obstacle_50x50"
 # environment_name = "L_shape_50x50"
 
