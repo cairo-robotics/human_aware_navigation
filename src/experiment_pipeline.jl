@@ -76,34 +76,43 @@ function PipelineOutput(env_name, num_experiments, num_humans, sudden_break, run
     )
 end
 
-
 function run_pipeline!(output_obj)
 
-    baseline_flag = true
-    random_flag = true
-    straight_line_flag = true
-    HJB_flag = true
     print_logs = false
 
     (;num_experiments, num_humans, sudden_break_flag, run_shield_flag, seeds,
     input_config,rollout_guide,baseline,esp_random,esp_sl,esp_hjb) = output_obj
     input_config.num_humans_env = num_humans
 
+    num_planners = 4
+    planner_names = (:lsp,:esp_r,:esp_sl,:esp_hjb)
+    planner_functions = (
+    lsp=run_extended_space_planner_experiment_random_rollout,
+    esp_r=run_extended_space_planner_experiment_random_rollout,
+    esp_sl=run_extended_space_planner_experiment_straight_line_rollout,
+    esp_hjb=run_extended_space_planner_experiment_HJB_rollout
+    )
+    run_planner_flags = (lsp=true,esp_r=true,esp_sl=true,esp_hjb=true)
+
     try
         # Threads.@threads for i in 1:num_experiments
         for i in 1:num_experiments
             seed = seeds[i]
 
-            if(baseline_flag)
-                IC = deepcopy(input_config) #To ensure the rng doesn't get modified between experiments when multi-threading
-                IC.rng = MersenneTwister(seed)
-                println("************ Running Experiment Number : ", i, " with LS Planner ************")
-                l = run_limited_space_planner_experiment(IC,sudden_break_flag,run_shield_flag,print_logs);
-                # push!(baseline,l)
-                baseline_result = PipelineIndividualOutput(l);
-                # push!(baseline,baseline_result)
-                baseline[i] = baseline_result
-            end
+            Threads.@threads for planner_id in 1:num_planners
+                planner = different_planners[planner_id]
+                flag = run_planner_flags[planner]
+                if(flag)
+                    IC = deepcopy(input_config) #To ensure the rng doesn't get modified between experiments when multi-threading
+                    IC.rng = MersenneTwister(seed)
+                    println("************ Running Experiment Number : ", i, " with LS Planner ************")
+                    planner_func = planner_functions[planner]
+                    o = run_limited_space_planner_experiment(IC,sudden_break_flag,run_shield_flag,print_logs);
+                    # push!(baseline,l)
+                    baseline_result = PipelineIndividualOutput(l);
+                    # push!(baseline,baseline_result)
+                    baseline[i] = baseline_result
+                end
 
 
             if(random_flag)
