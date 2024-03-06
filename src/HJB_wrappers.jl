@@ -21,12 +21,12 @@ function get_HJB_environment(vehicle_params,exp_details)
     workspace_obstacles = exp_details.env.obstacles
     obstacle_list = Array{VPolygon,1}()
     for obs in workspace_obstacles
-        push!(obstacle_list, VPolyCircle((obs.x,obs.y),obs.r+0.1))
+        push!(obstacle_list, BPDE.VPolyCircle((obs.x,obs.y),obs.r+0.1))
     end
     obstacle_list = SVector{length(workspace_obstacles),VPolygon{Float64, SVector{2, Float64}}}(obstacle_list)
 
     workspace_goal = (vehicle_params.goal.x, vehicle_params.goal.y)
-    goal = VPolyCircle(workspace_goal, exp_details.radius_around_vehicle_goal)
+    goal = BPDE.VPolyCircle(workspace_goal, exp_details.radius_around_vehicle_goal)
 
     env = HJBEnvironment(workspace, obstacle_list, goal)
     return env
@@ -93,34 +93,31 @@ function find_HJB_path(vehicle, vehicle_params, rollout_guide, exp_details)
 end
 
 function HJB_action_function(x, Dt, veh)
-    # set change in velocity (Dv) limit
-    Dv_lim = 0.5
-    # set steering angle (phi) limit
-    phi_max = 0.475
-    Dtheta_lim = deg2rad(45)
+ 
+    (;l,phi_max,delta_theta_max,delta_speed) = veh
 
     v = x[4]
-    vp = v + Dv_lim
-    vn = v - Dv_lim
+    vp = v + delta_speed
+    vn = v - delta_speed
 
-    phi_lim = atan(Dtheta_lim * 1/Dt * 1/abs(v) * veh.l)
+    phi_lim = atan(delta_theta_max * 1/Dt * 1/abs(v) * l)
     phi_lim = clamp(phi_lim, 0.0, phi_max)
 
-    phi_lim_p = atan(Dtheta_lim * 1/Dt * 1/abs(vp) * veh.l)
+    phi_lim_p = atan(delta_theta_max * 1/Dt * 1/abs(vp) * l)
     phi_lim_p = clamp(phi_lim_p, 0.0, phi_max)
 
-    phi_lim_n = atan(Dtheta_lim * 1/Dt * 1/abs(vn) * veh.l)
+    phi_lim_n = atan(delta_theta_max * 1/Dt * 1/abs(vn) * l)
     phi_lim_n = clamp(phi_lim_n, 0.0, phi_max)
 
     num_actions = 21
     actions = SVector{num_actions, SVector{2, Float64}}(
-        (-phi_lim_n, -Dv_lim),        # Dv = -Dv
-        (-2/3*phi_lim_n, -Dv_lim),
-        (-1/3*phi_lim_n, -Dv_lim),
-        (0.0, -Dv_lim),
-        (1/3*phi_lim_n, -Dv_lim),
-        (2/3*phi_lim_n, -Dv_lim),
-        (phi_lim_n, -Dv_lim),
+        (-phi_lim_n, -delta_speed),        # Dv = -Dv
+        (-2/3*phi_lim_n, -delta_speed),
+        (-1/3*phi_lim_n, -delta_speed),
+        (0.0, -delta_speed),
+        (1/3*phi_lim_n, -delta_speed),
+        (2/3*phi_lim_n, -delta_speed),
+        (phi_lim_n, -delta_speed),
 
         (-phi_lim, 0.0),       # Dv = 0.0
         (-2/3*phi_lim, 0.0),
@@ -130,13 +127,13 @@ function HJB_action_function(x, Dt, veh)
         (2/3*phi_lim, 0.0),
         (phi_lim, 0.0),
 
-        (-phi_lim_p, Dv_lim),        # Dv = +Dv
-        (-2/3*phi_lim_p, Dv_lim),
-        (-1/3*phi_lim_p, Dv_lim),
-        (0.0, Dv_lim),
-        (1/3*phi_lim_p, Dv_lim),
-        (2/3*phi_lim_p, Dv_lim),
-        (phi_lim_p, Dv_lim)
+        (-phi_lim_p, delta_speed),        # Dv = +Dv
+        (-2/3*phi_lim_p, delta_speed),
+        (-1/3*phi_lim_p, delta_speed),
+        (0.0, delta_speed),
+        (1/3*phi_lim_p, delta_speed),
+        (2/3*phi_lim_p, delta_speed),
+        (phi_lim_p, delta_speed)
         )
 
     return actions
