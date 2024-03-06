@@ -1,6 +1,5 @@
 using BellmanPDEs
 using JLD2
-# using ProfileView
 using Revise
 include("struct_definition.jl")
 include("environment.jl")
@@ -48,12 +47,13 @@ Initialization
 # environment_name = "L_shape_25x25"
 
 # environment_name = "no_obstacles_50x50"
-environment_name = "small_obstacles_50x50"
+# environment_name = "small_obstacles_50x50"
 # environment_name = "many_small_obstacles_50x50"
 # environment_name = "big_obstacle_50x50"
 # environment_name = "L_shape_50x50"
 
-# environment_name = "small_obstacles_20x20"
+environment_name = "small_obstacles_20x20"
+# environment_name = "L_shape_100x100"
 # environment_name = "indoor_tables_25x25"
 # environment_name = "aspen"
 
@@ -86,15 +86,13 @@ r = sqrt( (0.5*input_config.veh_length)^2 + (0.5*input_config.veh_breadth)^2 )
 veh_params = VehicleParametersESPlanner(input_config.veh_wheelbase,input_config.veh_length,
                 input_config.veh_breadth,input_config.veh_dist_origin_to_center, r,
                 input_config.veh_max_speed,input_config.veh_max_steering_angle,veh_goal)
-# veh_body_origin = get_vehicle_body_origin(veh_params.dist_origin_to_center,0.0,veh_params.length,veh_params.breadth)
-vehicle_body = get_vehicle_body(veh_params)
-output.vehicle_body = vehicle_body
-
 #=
 body_dims = SVector(veh_params.length, veh_params.breadth)
 origin_to_cent = SVector(veh_params.dist_origin_to_center, 0.0)
-veh_body = define_vehicle(veh_params.wheelbase, body_dims, origin_to_cent, veh_params.max_steering_angle, veh_params.max_speed)
+veh_body = get_vehicle_body(body_dims, origin_to_cent)
 =#
+vehicle_body = get_vehicle_body((veh_params.length,veh_params.length), (veh_params.dist_origin_to_center,0.0))
+output.vehicle_body = vehicle_body
 
 
 #=
@@ -120,7 +118,7 @@ solve_HJB = false
 if(solve_HJB)
     println("Solving HJB equation for given environment ....")
     start_time = time()
-    rollout_guide = HJBPolicy(HJB_planning_details, exp_details, veh_params);
+    rollout_guide = get_HJB_rollout_guide(HJB_planning_details, exp_details, veh_params);
     println("Finish time : ", time()-start_time)
     d = Dict("rollout_guide"=>rollout_guide);
     save(rollout_guide_filename,d);

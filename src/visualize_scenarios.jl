@@ -132,7 +132,7 @@ end
 function visualize_scenario_path(env,vehicle_params,output,path)
     VP = vehicle_params
     E = env
-    VB = output.vehicle_body.origin_body
+    VB = output.vehicle_body
     for i in 1:length(path)
         point = path[i]
         V = Vehicle(point.vehicle_x,point.vehicle_y,point.vehicle_theta,point.vehicle_v)
@@ -148,7 +148,7 @@ end
 function visualize_individual_scenario(scenario,env,vehicle_params,output)
     VP = vehicle_params
     E = env
-    VB = output.vehicle_body.origin_body
+    VB = output.vehicle_body
     point = scenario
     V = Vehicle(point.vehicle_x,point.vehicle_y,point.vehicle_theta,point.vehicle_v)
     if(V.x == -100.0)
@@ -361,7 +361,7 @@ function visualize_path_recursive_tree(snapshot,vehicle_params,output,path)
     opacity_levels = collect(1:-1/N:0)
 
     VP = vehicle_params
-    VB = output.vehicle_body.origin_body
+    VB = output.vehicle_body
     for i in 1:length(modified_path)
         point = modified_path[i][2]
         V = Vehicle(point.vehicle_x,point.vehicle_y,point.vehicle_theta,point.vehicle_v)

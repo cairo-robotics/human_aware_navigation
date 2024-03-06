@@ -65,7 +65,7 @@ end
 
 function OutputObj()
 
-    dummy_vehicle_body = VehicleBody(0.0, SVector(0.0,0.0), 0.0, SVector(0.0,0.0), VPolygon(), 0.0,0.0)
+    dummy_vehicle_body = get_vehicle_body(SVector(0.0,0.0), SVector(0.0,0.0))
 
     return Output(
         0, #=number_sudden_stops::Int64=#

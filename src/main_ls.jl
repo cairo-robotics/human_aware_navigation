@@ -90,8 +90,7 @@ r = sqrt( (0.5*input_config.veh_length)^2 + (0.5*input_config.veh_breadth)^2 )
 temp_veh_params = VehicleParametersLSPlanner(input_config.veh_wheelbase,input_config.veh_length,
                 input_config.veh_breadth,input_config.veh_dist_origin_to_center, r,
                 input_config.veh_max_speed,input_config.veh_max_steering_angle,veh_goal,Float64[])
-# veh_body_origin = get_vehicle_body_origin(temp_veh_params.dist_origin_to_center, 0.0,temp_veh_params.length, temp_veh_params.breadth)
-# output.vehicle_body_at_origin = veh_body_origin
+
 
 #=
 Find hybrid A* path for the given environment and vehicle.
@@ -105,7 +104,7 @@ path_planning_details.planning_time = given_planning_time
 veh_params = VehicleParametersLSPlanner(input_config.veh_wheelbase,input_config.veh_length,
                 input_config.veh_breadth,input_config.veh_dist_origin_to_center, r,
                 input_config.veh_max_speed,input_config.veh_max_steering_angle,veh_goal,vehicle_controls_sequence)
-vehicle_body = get_vehicle_body(veh_params)
+vehicle_body = get_vehicle_body((veh_params.length,veh_params.length), (veh_params.dist_origin_to_center,0.0))
 output.vehicle_body = vehicle_body
 
 #=

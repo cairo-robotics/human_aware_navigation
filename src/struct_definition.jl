@@ -202,11 +202,11 @@ end
     MAX_TIME_LIMIT::Float64 = 200.0
 end
 
-mutable struct Output
+mutable struct Output{T}
     number_sudden_stops::Int64
     number_risky_scenarios::Int64
     time_taken::Float64
-    vehicle_body::VehicleBody
+    vehicle_body::T
     vehicle_ran_into_boundary_wall::Bool
     vehicle_ran_into_obstacle::Bool
     vehicle_reached_goal::Bool

@@ -1,6 +1,5 @@
 using BellmanPDEs
 using JLD2
-# using ProfileView
 using Revise
 include("struct_definition.jl")
 include("environment.jl")
@@ -38,7 +37,7 @@ function run_extended_space_planner_experiment_HJB_rollout(input_config, rollout
     veh_params = VehicleParametersESPlanner(input_config.veh_wheelbase,input_config.veh_length,
                     input_config.veh_breadth,input_config.veh_dist_origin_to_center, r,
                     input_config.veh_max_speed,input_config.veh_max_steering_angle,veh_goal)
-    vehicle_body = get_vehicle_body(veh_params)
+    vehicle_body = get_vehicle_body((veh_params.length,veh_params.length), (veh_params.dist_origin_to_center,0.0))
     output.vehicle_body = vehicle_body
     #Define Humans
     env_humans, env_humans_params = generate_humans(env,veh,exp_details.human_start_v,exp_details.human_goal_locations,exp_details.num_humans_env,
@@ -112,7 +111,7 @@ function run_limited_space_planner_experiment(input_config,
     veh_params = VehicleParametersLSPlanner(input_config.veh_wheelbase,input_config.veh_length,
                     input_config.veh_breadth,input_config.veh_dist_origin_to_center, r,
                     input_config.veh_max_speed,input_config.veh_max_steering_angle,veh_goal,vehicle_controls_sequence)
-    vehicle_body = get_vehicle_body(veh_params)
+    vehicle_body = get_vehicle_body((veh_params.length,veh_params.length), (veh_params.dist_origin_to_center,0.0))
     output.vehicle_body = vehicle_body
 
     #Define Humans
@@ -155,7 +154,7 @@ function run_extended_space_planner_experiment_random_rollout(input_config, roll
     veh_params = VehicleParametersESPlanner(input_config.veh_wheelbase,input_config.veh_length,
                     input_config.veh_breadth,input_config.veh_dist_origin_to_center, r,
                     input_config.veh_max_speed,input_config.veh_max_steering_angle,veh_goal)
-    vehicle_body = get_vehicle_body(veh_params)
+    vehicle_body = get_vehicle_body((veh_params.length,veh_params.length), (veh_params.dist_origin_to_center,0.0))
     output.vehicle_body = vehicle_body
     #Define Humans
     env_humans, env_humans_params = generate_humans(env,veh,exp_details.human_start_v,exp_details.human_goal_locations,exp_details.num_humans_env,
@@ -213,7 +212,7 @@ function run_extended_space_planner_experiment_straight_line_rollout(input_confi
     veh_params = VehicleParametersESPlanner(input_config.veh_wheelbase,input_config.veh_length,
                     input_config.veh_breadth,input_config.veh_dist_origin_to_center, r,
                     input_config.veh_max_speed,input_config.veh_max_steering_angle,veh_goal)
-    vehicle_body = get_vehicle_body(veh_params)
+    vehicle_body = get_vehicle_body((veh_params.length,veh_params.length), (veh_params.dist_origin_to_center,0.0))
     output.vehicle_body = vehicle_body
     #Define Humans
     env_humans, env_humans_params = generate_humans(env,veh,exp_details.human_start_v,exp_details.human_goal_locations,exp_details.num_humans_env,

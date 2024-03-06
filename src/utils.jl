@@ -60,6 +60,22 @@ function get_vehicle_body(vehicle_params)
     return vehicle_body
 end
 
+#Function to get the vehicle body shape
+function get_vehicle_body(body_dims, origin_to_cent)
+
+    x0_min = origin_to_cent[1] - 1/2*body_dims[1]
+    x0_max = origin_to_cent[1] + 1/2*body_dims[1]
+    y0_min = origin_to_cent[2] - 1/2*body_dims[2]
+    y0_max = origin_to_cent[2] + 1/2*body_dims[2]
+    origin_body = VPolygon([
+                        SVector(x0_min, y0_min),
+                        SVector(x0_max, y0_min),
+                        SVector(x0_max, y0_max),
+                        SVector(x0_min, y0_max)
+                        ])
+    return origin_body
+end
+
 function in_obstacle(px,py,obstacle,padding=0.0)
     return is_within_range(px,py,obstacle.x,obstacle.y,obstacle.r+padding)
 end

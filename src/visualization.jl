@@ -237,7 +237,7 @@ function observe(output,exp_details,time_value,vehicle_executed_trajectory)
     e = output.sim_objects[time_value].env
     v = output.sim_objects[time_value].vehicle
     vp = output.sim_objects[time_value].vehicle_params
-    vb = output.vehicle_body.origin_body
+    vb = output.vehicle_body
     h = output.sim_objects[time_value].humans
     hp = output.sim_objects[time_value].humans_params
     sd = output.sim_objects[time_value].vehicle_sensor_data
