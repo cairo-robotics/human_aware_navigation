@@ -27,28 +27,6 @@ struct ActionExtendedSpacePOMDP
     delta_speed::Float64
 end
 
-#=
-Struct for HJB policy
-=#
-struct HJBPolicy{F1<:Function,F2<:Function,A,B,C,P,Q,M,N}
-    Dt::Float64
-    value_array::Array{Float64,1}
-    q_value_array::Array{Array{Float64,1},1}
-    get_actions::F1
-    get_cost::F2
-    env::Environment{A,B,C}
-    veh::VehicleBody{P,Q}
-    state_grid::StateGrid{M,N}
-end
-
-struct NewHJBPolicy
-    Dt::Float64
-    value_array::Array{Float64,1}
-    q_value_array::Array{Array{Float64,1},1}
-    env::Environment
-    veh::VehicleBody
-    state_grid::StateGrid
-end
 
 #=
 Struct for POMDP
@@ -893,11 +871,8 @@ function calculate_lower_bound(m::ExtendedSpacePOMDP,b)
                 # if(dist_to_closest_human < 5.0)
                     # return ActionExtendedSpacePOMDP(-10.0,-10.0)
                     delta_speed = -delta_speed
-                    safe_value_lim = 750.0
-                    a = better_reactive_policy(SVector(s.vehicle_x,s.vehicle_y,wrap_between_negative_pi_to_pi(s.vehicle_theta),s.vehicle_v),
-                        delta_speed,safe_value_lim,m.rollout_guide.get_actions,
-                        m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,
-                        m.rollout_guide.value_array,m.rollout_guide.veh,m.rollout_guide.state_grid)
+                    state = SVector(s.vehicle_x,s.vehicle_y,wrap_between_negative_pi_to_pi(s.vehicle_theta),s.vehicle_v)
+                    a = BPDE.reactive_controller_HJB_policy(m.rollout,state,delta_speed)
                     if(debug)
                         println("Near a Human")
                         println( ActionExtendedSpacePOMDP(a[1],delta_speed) )
