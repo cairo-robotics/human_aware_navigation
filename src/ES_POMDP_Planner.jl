@@ -872,7 +872,7 @@ function calculate_lower_bound(m::ExtendedSpacePOMDP,b)
                     # return ActionExtendedSpacePOMDP(-10.0,-10.0)
                     delta_speed = -delta_speed
                     state = SVector(s.vehicle_x,s.vehicle_y,wrap_between_negative_pi_to_pi(s.vehicle_theta),s.vehicle_v)
-                    a = BPDE.reactive_controller_HJB_policy(m.rollout,state,delta_speed)
+                    a = BPDE.reactive_controller_HJB_policy(m.rollout_guide,state,delta_speed)
                     if(debug)
                         println("Near a Human")
                         println( ActionExtendedSpacePOMDP(a[1],delta_speed) )
@@ -905,10 +905,8 @@ function calculate_lower_bound(m::ExtendedSpacePOMDP,b)
         return ActionExtendedSpacePOMDP(0.0,0.0)
     end
     s = first(particles(b))
-    safe_value_lim = 750.0
-    a = better_reactive_policy(SVector(s.vehicle_x,s.vehicle_y,wrap_between_negative_pi_to_pi(s.vehicle_theta),s.vehicle_v),delta_speed,
-        safe_value_lim,m.rollout_guide.get_actions,m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,
-        m.rollout_guide.value_array,m.rollout_guide.veh,m.rollout_guide.state_grid)
+    state = SVector(s.vehicle_x,s.vehicle_y,wrap_between_negative_pi_to_pi(s.vehicle_theta),s.vehicle_v)
+    a = BPDE.reactive_controller_HJB_policy(m.rollout_guide,state,delta_speed)
     if(debug)
         @show(delta_speed)
         println( ActionExtendedSpacePOMDP(a[1],a[2]) )
@@ -927,7 +925,8 @@ function get_actions_without_SB_HJB_rollout(m::ExtendedSpacePOMDP,b)
     delta_speed = m.vehicle_action_delta_speed
     pomdp_state = first(particles(b))
     if(pomdp_state.vehicle_v == 0.0)
-        steering_angle = clamp(get_steering_angle(m.vehicle_wheelbase,max_delta_angle,delta_speed,m.one_time_step),0.0,max_steering_angle)
+        steering_angle = clamp(get_steering_angle(m.vehicle_wheelbase,max_delta_angle,delta_speed,m.one_time_step),
+                                    0.0,max_steering_angle)
         return (ActionExtendedSpacePOMDP(-steering_angle,delta_speed),
                 ActionExtendedSpacePOMDP(-2*steering_angle/3,delta_speed),
                 ActionExtendedSpacePOMDP(-steering_angle/3,delta_speed),
@@ -942,9 +941,12 @@ function get_actions_without_SB_HJB_rollout(m::ExtendedSpacePOMDP,b)
                                 0.0,max_steering_angle)
         steering_angle_n = clamp(get_steering_angle(m.vehicle_wheelbase, max_delta_angle, pomdp_state.vehicle_v-delta_speed, m.one_time_step),
                                 0.0,max_steering_angle)
-        rollout_action = better_reactive_policy(SVector(pomdp_state.vehicle_x,pomdp_state.vehicle_y,wrap_between_negative_pi_to_pi(pomdp_state.vehicle_theta),pomdp_state.vehicle_v),
-                                delta_speed,750.0,m.rollout_guide.get_actions, m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,
-                                m.rollout_guide.value_array,m.rollout_guide.veh,m.rollout_guide.state_grid)
+        state = SVector(pomdp_state.vehicle_x,pomdp_state.vehicle_y,wrap_between_negative_pi_to_pi(pomdp_state.vehicle_theta),
+                            pomdp_state.vehicle_v)
+        rollout_action = BPDE.reactive_controller_HJB_policy(m.rollout_guide,state,delta_speed)                        
+        # rollout_action = better_reactive_policy(SVector(pomdp_state.vehicle_x,pomdp_state.vehicle_y,wrap_between_negative_pi_to_pi(pomdp_state.vehicle_theta),pomdp_state.vehicle_v),
+        #                         delta_speed,750.0,m.rollout_guide.get_actions, m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,
+        #                         m.rollout_guide.value_array,m.rollout_guide.veh,m.rollout_guide.state_grid)
         if( rollout_action[2] == -delta_speed &&
             (rollout_action[1]!=0.0 || rollout_action[1]!=steering_angle_n || rollout_action[1]!=-steering_angle_n) )
             return (
@@ -979,9 +981,12 @@ function get_actions_without_SB_HJB_rollout(m::ExtendedSpacePOMDP,b)
                             0.0,max_steering_angle)
         steering_angle_n = clamp(get_steering_angle(m.vehicle_wheelbase, max_delta_angle, pomdp_state.vehicle_v-delta_speed, m.one_time_step),
                             0.0, max_steering_angle)
-        rollout_action = better_reactive_policy(SVector(pomdp_state.vehicle_x,pomdp_state.vehicle_y,wrap_between_negative_pi_to_pi(pomdp_state.vehicle_theta),pomdp_state.vehicle_v),
-                                delta_speed,750.0,m.rollout_guide.get_actions, m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,
-                                m.rollout_guide.value_array,m.rollout_guide.veh,m.rollout_guide.state_grid)
+        state = SVector(pomdp_state.vehicle_x,pomdp_state.vehicle_y,wrap_between_negative_pi_to_pi(pomdp_state.vehicle_theta),
+                            pomdp_state.vehicle_v)
+        rollout_action = BPDE.reactive_controller_HJB_policy(m.rollout_guide,state,delta_speed)
+        # rollout_action = better_reactive_policy(SVector(pomdp_state.vehicle_x,pomdp_state.vehicle_y,wrap_between_negative_pi_to_pi(pomdp_state.vehicle_theta),pomdp_state.vehicle_v),
+        #                         delta_speed,750.0,m.rollout_guide.get_actions, m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,
+        #                         m.rollout_guide.value_array,m.rollout_guide.veh,m.rollout_guide.state_grid)
         if(
                 ( rollout_action[2] == -delta_speed && (rollout_action[1] != steering_angle_n
                     || rollout_action[1] != -steering_angle_n) || rollout_action[1] != 0.0 ) ||
@@ -1035,9 +1040,12 @@ function get_actions_with_SB_HJB_rollout(m::ExtendedSpacePOMDP,b)
                 )
     elseif(pomdp_state.vehicle_v == m.max_vehicle_speed)
         steering_angle = clamp(get_steering_angle(m.vehicle_wheelbase,max_delta_angle,pomdp_state.vehicle_v,m.one_time_step),0.0,max_steering_angle)
-        rollout_action = better_reactive_policy(SVector(pomdp_state.vehicle_x,pomdp_state.vehicle_y,wrap_between_negative_pi_to_pi(pomdp_state.vehicle_theta),pomdp_state.vehicle_v),
-                                delta_speed,750.0,m.rollout_guide.get_actions, m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,
-                                m.rollout_guide.value_array,m.rollout_guide.veh,m.rollout_guide.state_grid)
+        state = SVector(pomdp_state.vehicle_x,pomdp_state.vehicle_y,wrap_between_negative_pi_to_pi(pomdp_state.vehicle_theta),
+                            pomdp_state.vehicle_v)
+        rollout_action = BPDE.reactive_controller_HJB_policy(m.rollout_guide,state,delta_speed)
+        # rollout_action = better_reactive_policy(SVector(pomdp_state.vehicle_x,pomdp_state.vehicle_y,wrap_between_negative_pi_to_pi(pomdp_state.vehicle_theta),pomdp_state.vehicle_v),
+        #                         delta_speed,750.0,m.rollout_guide.get_actions, m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,
+        #                         m.rollout_guide.value_array,m.rollout_guide.veh,m.rollout_guide.state_grid)
         if(rollout_action[1]!=0.0 && rollout_action[2] == -delta_speed)
             return (
                     ActionExtendedSpacePOMDP(-steering_angle,0.0),
@@ -1066,9 +1074,12 @@ function get_actions_with_SB_HJB_rollout(m::ExtendedSpacePOMDP,b)
         end
     else
         steering_angle = clamp(get_steering_angle(m.vehicle_wheelbase,max_delta_angle,pomdp_state.vehicle_v,m.one_time_step),0.0,max_steering_angle)
-        rollout_action= better_reactive_policy(SVector(pomdp_state.vehicle_x,pomdp_state.vehicle_y,wrap_between_negative_pi_to_pi(pomdp_state.vehicle_theta),pomdp_state.vehicle_v),
-                                delta_speed,750.0,m.rollout_guide.get_actions, m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,
-                                m.rollout_guide.value_array,m.rollout_guide.veh,m.rollout_guide.state_grid)
+        state = SVector(pomdp_state.vehicle_x,pomdp_state.vehicle_y,wrap_between_negative_pi_to_pi(pomdp_state.vehicle_theta),
+                            pomdp_state.vehicle_v)
+        rollout_action = BPDE.reactive_controller_HJB_policy(m.rollout_guide,state,delta_speed)
+        # rollout_action= better_reactive_policy(SVector(pomdp_state.vehicle_x,pomdp_state.vehicle_y,wrap_between_negative_pi_to_pi(pomdp_state.vehicle_theta),pomdp_state.vehicle_v),
+        #                         delta_speed,750.0,m.rollout_guide.get_actions, m.rollout_guide.get_cost,m.one_time_step,m.rollout_guide.q_value_array,
+        #                         m.rollout_guide.value_array,m.rollout_guide.veh,m.rollout_guide.state_grid)
         if(rollout_action[1]!=0.0 && rollout_action[2] != 0.0 )
             return (ActionExtendedSpacePOMDP(-steering_angle,0.0),
                     ActionExtendedSpacePOMDP(-2*steering_angle/3,0.0),
