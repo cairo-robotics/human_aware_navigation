@@ -2,9 +2,8 @@ input_config =  InputParameters(
     MersenneTwister(0x62014574), #=rng::AbstractRNG=#
     100.0, #=env_length::Float64=#
     100.0, #=env_breadth::Float64=#
-    # ObstacleLocation[],
     ObstacleLocation[ObstacleLocation(70,30,30) ], #=obstacles::Array{obstacle_location,1}=#
-    40, #=num_humans_env::Int64=#
+    300, #=num_humans_env::Int64=#
     1.0, #=human_start_v::Float64=#
     6.0, #=veh_start_x::Float64=#
     4.0, #=veh_start_y::Float64=#
@@ -44,7 +43,7 @@ input_config =  InputParameters(
     0.1, #=simulator_time_step::Float64=#
     0.1, #=update_sensor_data_time_interval::Float64=#
     0.1, #=buffer_time::Float64=#
-    3.0 #=MAX_TIME_LIMIT::Float64=#
+    200.0 #=MAX_TIME_LIMIT::Float64=#
 )
 
 
