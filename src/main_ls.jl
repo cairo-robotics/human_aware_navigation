@@ -1,5 +1,4 @@
 using BellmanPDEs
-# using ProfileView
 using Revise
 include("struct_definition.jl")
 include("environment.jl")
@@ -48,12 +47,15 @@ Initialization
 # environment_name = "L_shape_25x25"
 # environment_name = "no_obstacles_50x50"
 # environment_name = "small_obstacles_50x50"
-environment_name = "many_small_obstacles_50x50"
-# environment_name = "big_obstacle_50x50"
+# environment_name = "many_small_obstacles_50x50"
+environment_name = "big_obstacle_50x50"
 # environment_name = "L_shape_50x50"
 
 # environment_name = "indoor_tables_25x25"
 # environment_name = "small_obstacles_25x25"
+# environment_name = "small_obstacles_20x20"
+# environment_name = "L_shape_100x100"
+# environment_name = "aspen"
 
 filename = "configs/"*environment_name*".jl"
 include(filename)
