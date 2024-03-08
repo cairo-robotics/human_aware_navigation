@@ -76,7 +76,7 @@ function PipelineOutput(env_name, num_experiments, num_humans, sudden_break, run
     )
 end
 
-function run_pipeline!(output_obj)
+function new_run_pipeline!(output_obj)
 
     print_logs = false
 
@@ -99,7 +99,7 @@ function run_pipeline!(output_obj)
         for i in 1:num_experiments
             seed = seeds[i]
 
-            Threads.@threads for planner_id in 1:num_planners
+            # Threads.@threads for planner_id in 1:num_planners
                 planner = different_planners[planner_id]
                 flag = run_planner_flags[planner]
                 if(flag)
@@ -161,6 +161,81 @@ function run_pipeline!(output_obj)
     end
 end
 
+function run_pipeline!(output_obj)
+
+    baseline_flag = false
+    random_flag = false
+    straight_line_flag = false
+    HJB_flag = true
+    print_logs = false
+
+    (;num_experiments, num_humans, sudden_break_flag, run_shield_flag, seeds,
+    input_config,rollout_guide,baseline,esp_random,esp_sl,esp_hjb) = output_obj
+    input_config.num_humans_env = num_humans
+
+    try
+        Threads.@threads for i in 1:num_experiments
+        # for i in 1:num_experiments
+            seed = seeds[i]
+            RG = deepcopy(rollout_guide)
+
+            if(baseline_flag)
+                IC = deepcopy(input_config) #To ensure the rng doesn't get modified between experiments when multi-threading
+                IC.rng = MersenneTwister(seed)
+                println("************ Running Experiment Number : ", i, " with LS Planner ************")
+                l = run_limited_space_planner_experiment(IC,sudden_break_flag,run_shield_flag,print_logs);
+                # push!(baseline,l)
+                baseline_result = PipelineIndividualOutput(l);
+                # push!(baseline,baseline_result)
+                baseline[i] = baseline_result
+            end
+
+
+            if(random_flag)
+                IC = deepcopy(input_config) #To ensure the rng doesn't get modified between experiments when multi-threading
+                IC.rng = MersenneTwister(seed)
+                println("************ Running Experiment Number : ", i, " with ES Planner - Random Rollouts ************")
+                e = run_extended_space_planner_experiment_random_rollout(IC, rollout_guide,sudden_break_flag,
+                                                            run_shield_flag,print_logs);
+                # push!(esp_outputs,e)
+                esp_random_result = PipelineIndividualOutput(e)
+                # push!(esp_random,esp_random_result)
+                esp_random[i] = esp_random_result
+            end
+
+
+            if(straight_line_flag)
+                IC = deepcopy(input_config) #To ensure the rng doesn't get modified between experiments when multi-threading
+                IC.rng = MersenneTwister(seed)
+                println("************ Running Experiment Number : ", i, " with ES Planner - Straight Line Rollouts ************")
+                e = run_extended_space_planner_experiment_straight_line_rollout(IC,rollout_guide,sudden_break_flag,
+                                                            run_shield_flag,print_logs);
+                # push!(esp_outputs,e)
+                esp_sl_result = PipelineIndividualOutput(e)
+                # push!(esp_sl,esp_sl_result)
+                esp_sl[i] = esp_sl_result
+            end
+
+
+            if(HJB_flag)
+                IC = deepcopy(input_config)
+                IC.rng = MersenneTwister(seed)
+                println("************ Running Experiment Number : ", i, " with ES Planner - HJB Rollouts ************")
+                e = run_extended_space_planner_experiment_HJB_rollout(IC,RG,sudden_break_flag,
+                                                            run_shield_flag,print_logs)
+                # push!(esp_outputs,e)
+                esp_hjb_result = PipelineIndividualOutput(e)
+                # push!(esp_hjb,esp_hjb_result)
+                esp_hjb[i] = esp_hjb_result
+            end
+
+            GC.gc()
+        end
+    catch ex
+        println("The experiment pipeline failed :(")
+        println(ex)
+    end
+end
 
 function get_time_results(experimental_data)
 
