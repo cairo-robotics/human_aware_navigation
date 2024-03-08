@@ -1,5 +1,5 @@
 input_config =  InputParameters(
-    MersenneTwister(0xe43a52b1), #=rng::AbstractRNG=#
+    MersenneTwister(), #=rng::AbstractRNG=#
     50.0, #=env_length::Float64=#
     50.0, #=env_breadth::Float64=#
     ObstacleLocation[ObstacleLocation(25,25,17)], #=obstacles::Array{obstacle_location,1}=#

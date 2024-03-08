@@ -1,5 +1,5 @@
 input_config =  InputParameters(
-    MersenneTwister(0xb6bb2225), #=rng::AbstractRNG=#
+    MersenneTwister(0xbfb0f804), #=rng::AbstractRNG=#
     50.0, #=env_length::Float64=#
     50.0, #=env_breadth::Float64=#
     ObstacleLocation[ObstacleLocation(9,14,2.5), ObstacleLocation(10,29,2.5),
@@ -56,7 +56,7 @@ input_config =  InputParameters(
 Weird scenarios
 0xddb067f6
 0x6d5e8914
-never reached goal, causes local minima bellman problems - 0xc63596b3
+never reached goal, causes local minima bellman problems - 0xc63596b3, 0xbfb0f804
 never reached goal - 0x5b336665, 0x7961389e
 
 collision - 0xf810d4e1
