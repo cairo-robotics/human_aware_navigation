@@ -28,6 +28,8 @@ end
 #     tree.ba_children[ba_child_index]
 #     scenarios_to_explore
 
+#=
+
 function see_states_visited_in_DESPOT(all_trees, which_index, pomdp)
 
     tree = all_trees[which_index][:tree]
@@ -59,8 +61,8 @@ function see_states_visited_in_DESPOT(all_trees, which_index, pomdp)
                 explored_cart_states[ current_scenario.second ] = ( tree.scenarios[parent_index].  )
 
 
-
     for scenario in tree.scenarios
         pomdp_state = scenario[1].second
         if(pomdp_state in keys(explored_cart_states))
             explored_cart_states[pomdp_state] =
+=#
