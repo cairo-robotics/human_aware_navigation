@@ -47,8 +47,8 @@ Initialization
 
 # environment_name = "no_obstacles_50x50"
 # environment_name = "small_obstacles_50x50"
-# environment_name = "many_small_obstacles_50x50"
-environment_name = "big_obstacle_50x50"
+environment_name = "many_small_obstacles_50x50"
+# environment_name = "big_obstacle_50x50"
 # environment_name = "L_shape_50x50"
 
 # environment_name = "small_obstacles_20x20"

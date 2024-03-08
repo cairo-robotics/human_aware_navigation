@@ -13,9 +13,9 @@ include("simulator_utils.jl")
 include("parser.jl")
 include("visualization.jl")
 include("HJB_wrappers.jl")
-include("shielding/shield.jl")
-include("shielding/shield_wrappers.jl")
-include("shielding/lsp_shield_wrappers.jl")
+include("shielding/shield_utils.jl")
+include("shielding/esp_shield.jl")
+include("shielding/lsp_shield.jl")
 
 
 function run_extended_space_planner_experiment_HJB_rollout(input_config, rollout_guide,
